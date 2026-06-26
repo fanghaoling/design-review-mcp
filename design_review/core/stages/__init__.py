@@ -1,6 +1,7 @@
 """内置 Pipeline Stage + 默认 pipeline 构造。
 
-8 个 Stage 顺序：retrieve → context → prompt → review → parse → normalize → consensus → score。
+9 个 Stage 顺序：retrieve → context → prompt → review → parse → dedup → normalize → consensus → score。
+dedup（v1.2 F2）在 parse 后模型内去重；normalize（v1.2 F1）做 case_ref 跨维度合并。
 v2 可 pipeline.insert(DebateStage(), before="normalize")。
 """
 from __future__ import annotations
@@ -10,6 +11,7 @@ from pathlib import Path
 from ..pipeline import Pipeline
 from .consensus import ConsensusStage
 from .context import ContextStage
+from .dedup import DedupStage
 from .normalize import NormalizeStage
 from .parse import ParseStage
 from .prompt import PromptStage
@@ -23,6 +25,7 @@ __all__ = [
     "PromptStage",
     "ReviewStage",
     "ParseStage",
+    "DedupStage",
     "NormalizeStage",
     "ConsensusStage",
     "ScoreStage",
@@ -40,7 +43,7 @@ def build_default_pipeline(
     core_reviewers_dir: str | Path | None = None,
     default_dimensions: list[str] | None = None,
 ) -> Pipeline:
-    """构造默认 8-Stage pipeline。"""
+    """构造默认 9-stage pipeline。"""
     crd = Path(core_reviewers_dir) if core_reviewers_dir else CORE_REVIEWERS_DIR
     return Pipeline(
         [
@@ -49,6 +52,7 @@ def build_default_pipeline(
             PromptStage(crd, default_dimensions=default_dimensions),
             ReviewStage(),
             ParseStage(),
+            DedupStage(),
             NormalizeStage(normalizer_model),
             ConsensusStage(threshold),
             ScoreStage(),
