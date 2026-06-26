@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from ..errors import classify_error
 from ..pipeline import PipelineContext, Stage
 from ..report import ReviewReport
 
@@ -35,7 +36,11 @@ class ScoreStage:
             cf.calibrated_confidence = _calibrate(cf, retrieved_ids)
 
         failed = [
-            {"model": it["model"], "error": it["response"].error}
+            {
+                "model": it["model"],
+                "error": it["response"].error,
+                **classify_error(it["response"].error or ""),
+            }
             for it in ctx.responses
             if not it["response"].ok
         ]
