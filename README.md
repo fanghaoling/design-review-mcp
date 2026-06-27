@@ -2,6 +2,8 @@
 
 AI Design Review Framework — 多模型对抗设计审查 MCP 工具。
 
+> **首次使用？** 先看 [GETTING_STARTED.md](GETTING_STARTED.md) —— 5 分钟跑通第一次审查 + 常见配置坑（`api_key_env` 填法 / 中转站接入 / `setx` 后重启 VSCode / `_resolve_endpoints` 解析所有 endpoints）。
+
 把设计文档/代码 fan-out 给多个不同厂商大模型并行审查，结合项目知识库检索注入历史踩坑，按 canonical 归一 + 校准共识汇总，提高规划质量。
 
 ## 架构
