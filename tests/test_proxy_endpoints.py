@@ -147,6 +147,32 @@ def test_normalize_panel_short_ref_and_expand_no_label_collision():
     assert [e["label"] for e in entries] == ["zhipu/glm-5.2", "zhipu/glm-4.7"]
 
 
+def test_normalize_panel_wildcard_endpoints():
+    """panel 'endpoints' 通配 → 展开所有 endpoints 的所有 models（一行引全部中转站）。"""
+    cfg = {
+        "zhipu": {"models": ["glm-5.2"]},
+        "openai_relay": {"models": ["gpt-4o", "o3"]},
+    }
+    entries = _normalize_panel(["endpoints"], {"zhipu", "openai_relay"}, cfg)
+    assert [e["label"] for e in entries] == ["zhipu/glm-5.2", "openai_relay/gpt-4o", "openai_relay/o3"]
+    assert all(e["endpoint_id"] in ("zhipu", "openai_relay") for e in entries)
+
+
+def test_normalize_panel_wildcard_no_models_declared():
+    """通配但无 endpoints.<id>.models 声明 → 清晰报错。"""
+    with pytest.raises(ValueError, match="无任何"):
+        _normalize_panel(["endpoints"], {"zhipu"}, {"zhipu": {}})
+
+
+def test_normalize_panel_wildcard_mix_with_official():
+    """通配 + 官方模型混合：'endpoints' 展开 + litellm 原生共存。"""
+    cfg = {"zhipu": {"models": ["glm-5.2"]}}
+    entries = _normalize_panel(["gpt-4o", "endpoints"], {"zhipu"}, cfg)
+    assert [e["label"] for e in entries] == ["gpt-4o", "zhipu/glm-5.2"]
+    assert entries[0]["endpoint_id"] is None      # gpt-4o 官方
+    assert entries[1]["endpoint_id"] == "zhipu"   # 通配展开
+
+
 # ===== LiteLLMBackend：endpoint_id → litellm.acompletion 参数 =====
 
 class _Capture:

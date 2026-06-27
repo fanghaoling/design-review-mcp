@@ -117,9 +117,10 @@ def _normalize_panel(
 ) -> list[dict]:
     """panel（list[str|dict]）-> list[PanelEntry{label, model, endpoint_id}]。
 
-    str 三态（v2.3 加短引用/全展开，向后兼容 litellm 原生）：
-    - == endpoint_id → 全展开 endpoints.<id>.models（声明的模型列表，一行引一家中转站全部模型）
-    - endpoint_id/model → 短引用（label=id/model，省去 dict 一长串）
+    str 四态（v2.3 加通配/短引用/全展开，向后兼容 litellm 原生）：
+    - == "endpoints" → 通配：展开所有 endpoints.<id>.models（一行引全部中转站，厂商/模型都不用逐个填）
+    - == endpoint_id → 全展开该 endpoint 的 models
+    - endpoint_id/model → 短引用（label=id/model）
     - 否则 → litellm 原生官方（endpoint_id=None，走 env）
     dict={endpoint, model, label} 引用中转站（v1.6，自定义 label）。
     校验 label 全局唯一（撞名报错——label 是身份标识，撞名会让 consensus 错误合并）。
@@ -145,12 +146,24 @@ def _normalize_panel(
 
 
 def _str_specs(item: str, endpoint_ids: set, endpoints_cfg: dict | None) -> list[tuple]:
-    """str panel 项 → [(endpoint_id, model, label)]（全展开返回多个）。
+    """str panel 项 → [(endpoint_id, model, label)]（通配/全展开返回多个）。
 
-    - item == endpoint_id → 全展开 endpoints.<id>.models
+    - item == "endpoints" → 通配：展开所有 endpoints.<id>.models（一行引全部中转站模型，v2.3）
+    - item == endpoint_id → 全展开该 endpoint 的 models
     - item = endpoint_id/model → 短引用（label=item）
     - 否则 → litellm 原生官方（endpoint_id=None）
     """
+    # 通配：str == "endpoints" → 展开所有 endpoints 的所有 models（各 endpoint 须声明 models）
+    if item == "endpoints":
+        all_models: list[tuple] = []
+        for eid, ep in (endpoints_cfg or {}).items():
+            for m in (ep.get("models") or []):
+                all_models.append((eid, m, f"{eid}/{m}"))
+        if not all_models:
+            raise ValueError(
+                "panel 'endpoints' 通配但无任何 endpoints.<id>.models 声明（每个中转站须声明 models）"
+            )
+        return all_models
     # 全展开：str 本身是 endpoint_id
     if item in endpoint_ids:
         models = ((endpoints_cfg or {}).get(item) or {}).get("models") or []
