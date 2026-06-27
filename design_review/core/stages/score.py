@@ -16,12 +16,28 @@ logger = logging.getLogger("design_review.stage.score")
 _CONSENSUS_FACTOR = {"consensus": 1.0, "majority": 0.7, "individual": 0.3}
 
 
+def _mediation_factor(cf) -> float:
+    """v1.7：按 trusted mediation attachment 调权。取 source_findings 里最差 verdict
+    （rejected→0.2 强降、unconfirmed→0.5 中降、confirmed/无→1.0）。不丢只降权留痕。"""
+    worst = 1.0
+    for f in (cf.source_findings or []):
+        for att in getattr(f, "attachments", []):
+            if getattr(att, "type", None) == "mediation":
+                v = att.payload.get("verdict") if hasattr(att, "payload") else None
+                if v == "rejected":
+                    return 0.2
+                if v == "unconfirmed" and worst > 0.5:
+                    worst = 0.5
+    return worst
+
+
 def _calibrate(cf, retrieved_ids: set[str]) -> float:
     src = cf.source_findings or []
     base = sum(getattr(f, "confidence", 0.5) for f in src) / max(len(src), 1)
     factor = _CONSENSUS_FACTOR.get(cf.bucket, 0.3)
     km = 1.2 if (cf.case_ref and cf.case_ref in retrieved_ids) else 0.9
-    return round(min(base * factor * km, 1.0), 3)
+    med = _mediation_factor(cf)  # v1.7 trusted 中介调权
+    return round(min(base * factor * km * med, 1.0), 3)
 
 
 class ScoreStage:
@@ -87,6 +103,7 @@ class ScoreStage:
             f"individual={ind_count} failed={len(failed)}"
             + (f" budget_trimmed={ctx.jobs_run}/{ctx.jobs_total}" if ctx.budget_exhausted else ""),
             risk={"overall_level": overall, "high_severity_count": high_count},
+            privacy=dict(ctx.privacy_meta),
         )
         ctx.report = report
         return ctx

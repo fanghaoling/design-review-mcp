@@ -25,6 +25,7 @@ class Finding:
     suggestion: str
     confidence: float  # 模型自报 0~1
     case_ref: str | None = None
+    attachments: list = field(default_factory=list)  # v1.7 FindingAttachment[{source,type,payload}]，immutable 附加
 
 
 @dataclass
@@ -68,6 +69,7 @@ class ReviewReport:
     usage: dict = field(default_factory=dict)  # {total_tokens, cost_usd}
     summary: str = ""
     risk: dict = field(default_factory=dict)  # {overall_level, top_risks}；v3 细化
+    privacy: dict = field(default_factory=dict)  # v1.7 {policy, coverage, missing_topics, trusted}
 
     def to_dict(self) -> dict:
         """序列化为 JSON 友好的 dict（JSONRenderer / MCP 工具返回用）。"""
@@ -91,4 +93,5 @@ class ReviewReport:
             "usage": dict(self.usage),
             "summary": self.summary,
             "risk": dict(self.risk),
+            "privacy": dict(self.privacy),
         }

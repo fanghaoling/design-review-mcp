@@ -22,12 +22,14 @@ class ReviewEngine:
         knowledge: Any,
         pipeline: Pipeline,
         defaults: dict | None = None,
+        policy: Any = None,
     ) -> None:
         self.adapter = adapter
         self.backend = backend
         self.knowledge = knowledge
         self.pipeline = pipeline
         self.defaults = defaults or {}
+        self.policy = policy  # v1.7 PrivacyPolicy（None=不脱敏）
 
     async def review(
         self,
@@ -39,8 +41,10 @@ class ReviewEngine:
         extra_context: str = "",
         effort: str | None = None,
         max_cost_usd: float | None = None,
+        policy: Any = None,  # v1.7 PrivacyPolicy（None=不脱敏）
     ) -> PipelineContext:
         """跑一次完整审查，返回填充好的 PipelineContext（含 ctx.report）。"""
+        policy = policy if policy is not None else self.policy  # v1.7 默认用 engine 装配的 policy
         raw_panel = list(panel or self.defaults.get("panel") or [])
         # v1.6: 统一成 PanelEntry dict（str→官方 entry；dict 原样，server 已 normalize endpoint_id）。
         # 让 engine 可直接被传 str 列表调用（测试/便捷），server 传 dict 也兼容。
@@ -48,8 +52,24 @@ class ReviewEngine:
             {"label": p, "model": p, "endpoint_id": None} if isinstance(p, str) else p
             for p in raw_panel
         ]
+        # v1.7 隐私策略：transform 在 pipeline 外（PromptStage 拿 effective_doc 不知 strict 存在）。
+        if policy is not None:
+            tr = await policy.transform(document, self.backend)
+            effective_doc = tr.document
+            privacy_meta = {
+                "policy": policy.name,
+                "coverage": tr.coverage,
+                "missing_topics": list(tr.missing_topics),
+                "redacted_items": list(tr.redacted_items),
+                "trusted": getattr(policy, "trusted", {}).get("label")
+                if hasattr(policy, "trusted")
+                else None,
+            }
+        else:
+            effective_doc = document
+            privacy_meta = {}
         ctx = PipelineContext(
-            document=document,
+            document=effective_doc,
             adapter=self.adapter,
             backend=self.backend,
             knowledge=self.knowledge,
@@ -59,6 +79,9 @@ class ReviewEngine:
             extra_context=extra_context,
             effort=effort or self.defaults.get("effort"),
             max_cost_usd=max_cost_usd if max_cost_usd is not None else self.defaults.get("max_cost_usd"),
+            original_document=document,
+            policy=policy,
+            privacy_meta=privacy_meta,
         )
         await self.pipeline.run(ctx)
         return ctx

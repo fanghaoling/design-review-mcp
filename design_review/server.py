@@ -47,6 +47,7 @@ from .core.reviewers.loader import list_reviewers as _list_reviewer_files  # noq
 from .core.stages import CORE_REVIEWERS_DIR, build_default_pipeline  # noqa: E402
 from .core import ReviewDocument  # noqa: E402
 from .knowledge import YamlKnowledgeProvider  # noqa: E402
+from .privacy import build_policy  # noqa: E402
 from .providers import LiteLLMBackend  # noqa: E402
 
 _ADAPTERS = {"unity": UnityAdapter, "generic": GenericAdapter}
@@ -150,13 +151,22 @@ def _build_engine(adapter, dd: dict) -> ReviewEngine:
     endpoint_ids = set(registry.keys())
     backend = LiteLLMBackend(timeout=float(dd.get("timeout", 90)), endpoint_registry=registry)
     knowledge = YamlKnowledgeProvider(_knowledge_dirs(adapter))
+    # v1.7 隐私策略：解析 trusted（复用 endpoint）+ build_policy（off→None / strict→StrictPolicy）
+    privacy_cfg = dd.get("privacy_policy")
+    trusted_entry = (
+        _normalize_one(privacy_cfg["trusted"], endpoint_ids)
+        if (isinstance(privacy_cfg, dict) and privacy_cfg.get("trusted"))
+        else None
+    )
+    policy = build_policy(privacy_cfg, trusted_entry)
     pipeline = build_default_pipeline(
         normalizer=_normalize_one(dd.get("normalizer_model", "claude-opus-4-8"), endpoint_ids),
         threshold=int(dd.get("consensus_threshold", 2)),
+        policy=policy,
     )
     return ReviewEngine(
         adapter=adapter, backend=backend, knowledge=knowledge,
-        pipeline=pipeline, defaults=dd,
+        pipeline=pipeline, defaults=dd, policy=policy,
     )
 
 

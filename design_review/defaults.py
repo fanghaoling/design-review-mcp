@@ -29,6 +29,8 @@ _BUILTINS = {
     "max_cost_usd": None,
     # v1.6 中转站/自定义 endpoint：{id: {provider: openai|anthropic, base_url, api_key_env|api_key, headers?, timeout?}}
     "endpoints": {},
+    # v1.7 隐私/脱敏策略（{policy: off|strict, trusted:{endpoint,model,label}, min_coverage}）。None/off=不脱敏
+    "privacy_policy": None,
 }
 
 

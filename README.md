@@ -138,6 +138,32 @@ API key 走环境变量（litellm 约定）：
 
 **升级注意**：从 v1.5 升级后首次 review 会 miss 缓存（hash 输入结构变，重跑一次即可，无数据损坏）。回滚到 v1.5 须把 panel 的 dict 项改回 str。
 
+## 隐私模式（v1.7）
+
+对抗审查默认把完整方案/代码 fan-out 给 panel 所有模型。若 panel 含多家中转站/厂商，代码和技术细节会泄露给所有第三方。**隐私模式**让可信中间 AI 看全文，对抗模型只看脱敏摘要，对抗 verdict 由可信 AI 补 evidence + 评估。
+
+```jsonc
+{
+  "privacy_policy": {
+    "policy": "strict",                          // off(默认) | strict
+    "trusted": {"endpoint": "zhipu", "model": "glm-5.2", "label": "trusted"},  // 可信 AI（复用 endpoint）
+    "min_coverage": 0.5                          // 摘要覆盖度低于此则 raise（防垃圾摘要）
+  }
+}
+```
+
+**流程**（PromptStage 不知 strict 存在）：
+1. `StrictPolicy.transform`（pipeline 外）：trusted 看完整方案+context → 脱敏摘要 + `coverage`/`missing_topics`/`redacted_items`。coverage 低/失败/空 → **raise 终止，绝不静默回退明文**（否则全文泄露）。
+2. PromptStage 用摘要（effective_doc），对抗模型不接触全文。
+3. `StrictPolicy.mediate`（Parse 后）：trusted 看对抗 verdict + 全文 → 逐条评估，给每条 finding 附加 `FindingAttachment{source, type:"mediation", payload:{evidence, reason, verdict}}`。**Finding immutable**（原 panel 字段不变），confirmed/unconfirmed/rejected 都不丢（后两个降权留痕）。
+
+**trade-off**：
+- 质量 ≈ trusted 模型能力（智谱 glm-5.2 中等）。`min_coverage` + `missing_topics` 挡垃圾摘要，但挡不住"摘要完整对抗仍漏 bug"。换更强 trusted（真 Claude via New API）才根本提升。
+- code review 受限（代码脱敏破坏语义），严格模式主要适用 **plan review**。
+- 成本：trusted 多 2 次调用（transform + mediate）。
+
+**为未来扩展**：privacy 是一级模块（`privacy/{base,off,strict}.py`），`PrivacyPolicy` Protocol + `FindingAttachment` 为 Enterprise/PII/Regex/AST/CompositePolicy 留接口，core/pipeline 不动即可加新 policy（如 `privacy/enterprise.py` 实现 Protocol + 新 attachment type）。
+
 ## 开发
 
 ```bash

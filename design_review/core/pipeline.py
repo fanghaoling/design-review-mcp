@@ -29,6 +29,10 @@ class PipelineContext:
     extra_context: str = ""
     effort: str | None = None  # low/medium/high/xhigh/max；None=各模型默认。Claude/OpenAI-o 才生效
     max_cost_usd: float | None = None  # per-review 总成本上限；None=无上限
+    # v1.7 隐私策略：
+    policy: Any = None  # PrivacyPolicy（None=不脱敏，PromptStage 拿原文）
+    original_document: Any = None  # 原文（Mediate 看全文）；ctx.document 是 effective（脱敏摘要 or 原文）
+    privacy_meta: dict = field(default_factory=dict)  # {policy, coverage, missing_topics, trusted}
     # 各 Stage 填充：
     project_version: dict[str, str] = field(default_factory=dict)
     retrieved_cases: list = field(default_factory=list)

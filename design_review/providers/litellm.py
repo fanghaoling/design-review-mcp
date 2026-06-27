@@ -100,6 +100,12 @@ class LiteLLMBackend:
         # endpoint timeout 覆盖全局（慢中转站）
         call_timeout = ep.get("timeout") if ep and ep.get("timeout") else self.timeout
 
+        # OpenAI 推理模型（o 系列 + gpt-5 系列）不支持 temperature/top_p（只支持默认 1），传了报 400；
+        # litellm drop_params 兜不住，按模型名显式跳过采样参数。
+        short = litellm_model.split("/")[-1]
+        is_reasoning = bool(re.match(r"(?:o[1-9]|gpt-5)", short))
+        sampling = {} if is_reasoning else {"temperature": temperature, "top_p": top_p}
+
         try:
             resp = await litellm.acompletion(
                 model=litellm_model,
@@ -109,10 +115,9 @@ class LiteLLMBackend:
                 ],
                 num_retries=self.num_retries,
                 timeout=call_timeout,
-                temperature=temperature,
-                top_p=top_p,
                 max_tokens=max_tokens,
                 response_format=self.response_format,
+                **sampling,
                 **_effort_kwargs(litellm_model, effort),
                 **{k: v for k, v in ep_kwargs.items() if v is not None},
             )
