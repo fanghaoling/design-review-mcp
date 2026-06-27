@@ -15,7 +15,7 @@ from ..schema import get_schema
 
 logger = logging.getLogger("design_review.stage.parse")
 
-_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_FENCE_OPEN_RE = re.compile(r"```(?:json)?\s*")
 _schema_cache: dict | None = None
 
 
@@ -26,38 +26,77 @@ def _schema() -> dict:
     return _schema_cache
 
 
+def _strip_fence(text: str) -> str:
+    """去掉 ```json 围栏（闭合或未闭合都处理），返回内侧 JSON 文本。无围栏返回原文本。"""
+    m = _FENCE_OPEN_RE.search(text)
+    inner = text[m.end():] if m else text
+    close = re.search(r"```", inner)
+    return inner[: close.start()] if close else inner
+
+
+def _repair_truncated_json(s: str) -> dict | None:
+    """修复被截断的 JSON：补上未闭合的字符串/数组/对象后重试解析。
+
+    glm-5.2 等模型超长输出偶尔被截断（外层 { 和 [ 没闭合，``` 也没收尾），直接 json.loads
+    全失败、整条响应被丢。这里按字符扫描跟踪未闭合的 string/`{`/`[`，末尾补对应闭合符，
+    挽回已写完的 findings（最后半截那条会被 normalize_finding 因缺 evidence_quote 丢弃）。
+    """
+    out: list[str] = []
+    in_string = False
+    escape = False
+    stack: list[str] = []
+    closers = {"{": "}", "[": "]"}
+    for ch in s:
+        out.append(ch)
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            stack.append(ch)
+        elif ch == "}" and stack and stack[-1] == "{":
+            stack.pop()
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
+    if in_string:
+        out.append('"')
+    out.extend(closers[o] for o in reversed(stack))
+    try:
+        obj = json.loads("".join(out))
+        return obj if isinstance(obj, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def extract_json_object(text: str) -> dict | None:
-    """提 JSON 对象，4 级 fallback（越来越激进，挽回国产模型非纯 JSON 输出）：
-    1) ```json 块  2) 整段 json.loads  3) 正则最外层 {.*}（跨行，说明文字+JSON）  4) "issues":[...] 数组。
+    """提 JSON 对象，3 级 fallback（挽回国产模型非纯 JSON / 截断输出）：
+    1) 去 ```json 围栏后从首个 { 起 json.loads（完整 JSON，含"说明文字+JSON"）
+    2) 同上区段直接解析失败的兜底
+    3) 截断修复（补未闭合括号/字符串）—— glm-5.2 超长输出被截断时
     """
     if not text:
         return None
-    # 1) ```json 块
-    m = _JSON_BLOCK_RE.search(text)
-    if m:
-        try:
-            obj = json.loads(m.group(1))
-            if isinstance(obj, dict):
-                return obj
-        except Exception:  # noqa: BLE001
-            pass
-    # 2) 整段
+    inner = _strip_fence(text)
+    brace = inner.find("{")
+    if brace < 0:
+        return None
+    cand = inner[brace:]
+    # 1) 直接解析（完整 JSON / 说明文字+JSON 都走这）
     try:
-        obj = json.loads(text.strip())
+        obj = json.loads(cand)
         if isinstance(obj, dict):
             return obj
     except Exception:  # noqa: BLE001
         pass
-    # 3) 正则最外层 {.*}（跨行，捕获"说明文字 + JSON"的情况）
-    m = re.search(r"\{.*\}", text, re.DOTALL)
-    if m:
-        try:
-            obj = json.loads(m.group(0))
-            if isinstance(obj, dict):
-                return obj
-        except Exception:  # noqa: BLE001
-            pass
-    return None
+    # 2) 截断修复（glm-5.2 等偶发截断，外层括号没闭合）
+    return _repair_truncated_json(cand)
 
 
 _VALID_SEVERITY = {"high", "medium", "low"}

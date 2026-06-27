@@ -70,3 +70,27 @@ def test_normalize_fixes_bad_severity():
     f["severity"] = "critical"
     nf = normalize_finding(f)
     assert nf is not None and nf["severity"] == "medium"
+
+
+def test_extract_truncated_recovers_complete():
+    """glm-5.2 超长输出被截断（外层 } ] 没闭合、``` 也没收尾）：截断修复挽回已写完的 issue。
+
+    半截的最后一条（缺 evidence_quote）会在 ParseStage 的 normalize_finding 被丢，
+    但至少完整的 findings 不再整条陪葬。
+    """
+    t = (
+        '```json\n{"issues":['
+        '{"dimension":"ecs_perf","title":"完整的","evidence_quote":"q","severity":"high"}, '
+        '{"dimension":"planner","severity":"high","title":"半截'
+    )
+    obj = extract_json_object(t)
+    assert obj is not None and "issues" in obj
+    assert len(obj["issues"]) == 2  # 修复后两条都回来（半截的留给 normalize 丢）
+
+
+def test_extract_truncated_no_fence():
+    """无围栏、截断的裸 JSON 也能修。"""
+    t = '{"issues":[{"dimension":"x","title":"t","evidence_quote":"q"}'
+    obj = extract_json_object(t)
+    assert obj is not None and len(obj["issues"]) == 1
+
