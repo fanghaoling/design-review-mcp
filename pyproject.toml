@@ -14,10 +14,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.6"]
 
 [project.scripts]
 design-review-mcp = "design_review.server:main"
+design-review = "design_review.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -38,3 +39,18 @@ packages = ["design_review"]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+
+# ruff（CI lint）：target 3.10，只抓真问题（F=pyflakes 未用导入/变量 + E/W 基本风格），
+# 行长交给编辑器不管（ignore E501）。其余 lint（I/UP/B）等稳定后渐进加。
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["F", "E", "W"]
+ignore = ["E501"]
+
+# 测试文件常用 sys.path.insert / fixture 前置 import，放宽位置检查（主代码仍严格，逐个 noqa）
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]

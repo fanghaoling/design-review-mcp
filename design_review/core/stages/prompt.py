@@ -10,8 +10,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..pipeline import PipelineContext, Stage
-from ..reviewers.loader import list_reviewers, load_reviewer
+from ..pipeline import PipelineContext
+from ..reviewers.loader import load_reviewer
 from ..schema import get_schema
 
 # 默认通用维度：审计划完整性 + 边界（任何项目都有价值）
@@ -61,7 +61,7 @@ def _compress_document(content: str, mode: str, min_chars: int = 50) -> Compress
         return CompressedDocument(original, "full", olen, olen)
     if mode == "minimal":
         lines = original.split("\n")
-        headings = [l for l in lines if l.lstrip().startswith("#")]
+        headings = [line for line in lines if line.lstrip().startswith("#")]
         # first_para：第一个非 heading、非空段（跳标题段取实质内容，否则 split[0] 常是 heading 重复）
         paras = original.split("\n\n")
         first_para = next((p for p in paras if p.strip() and not p.strip().startswith("#")), "")
@@ -69,14 +69,14 @@ def _compress_document(content: str, mode: str, min_chars: int = 50) -> Compress
     elif mode == "compressed":
         no_code = _FENCED_RE.sub("", original)
         kept = []
-        for l in no_code.split("\n"):
-            s = l.lstrip()
+        for line in no_code.split("\n"):
+            s = line.lstrip()
             if not s:
                 continue
             if s.startswith("#") or s.startswith(("- ", "* ")):
-                kept.append(l)  # 保留 headings/list（LLM 依赖结构）
+                kept.append(line)  # 保留 headings/list（LLM 依赖结构）
             else:
-                kept.append(l[:200])  # 段落截断长行
+                kept.append(line[:200])  # 段落截断长行
         result = "\n".join(kept)
     else:  # 未知 mode fallback full
         return CompressedDocument(original, "full", olen, olen)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 
 logger = logging.getLogger("design_review.stage.review")
 

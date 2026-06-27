@@ -5,7 +5,7 @@ Pipeline 第 2 步。聚合 adapter.read_context + 渲染案例 + adapter.read_c
 """
 from __future__ import annotations
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 from ...knowledge import render_for_prompt
 
 

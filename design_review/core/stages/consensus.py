@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 from ..report import Finding
 
 logger = logging.getLogger("design_review.stage.consensus")

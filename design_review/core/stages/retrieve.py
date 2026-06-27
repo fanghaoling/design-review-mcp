@@ -4,7 +4,7 @@ Pipeline 第 1 步。读项目版本 → 在文档正文上关键词 retrieve to
 """
 from __future__ import annotations
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 
 
 class RetrieveStage:

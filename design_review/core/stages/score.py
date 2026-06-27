@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from ..errors import classify_error
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 from ..report import ReviewReport
 
 logger = logging.getLogger("design_review.stage.score")

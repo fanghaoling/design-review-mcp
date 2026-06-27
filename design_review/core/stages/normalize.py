@@ -17,7 +17,7 @@ import json
 import logging
 import re
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 from ..report import CanonicalFinding, Finding
 
 logger = logging.getLogger("design_review.stage.normalize")

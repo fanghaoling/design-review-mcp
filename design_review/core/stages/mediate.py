@@ -6,7 +6,7 @@ off 模式 pipeline 不插此 stage。位置：Parse 后、Dedup 前——对抗
 """
 from __future__ import annotations
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 
 
 class MediateStage:

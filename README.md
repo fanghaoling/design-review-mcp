@@ -93,6 +93,41 @@ API key 走环境变量（litellm 约定）：
 }
 ```
 
+## CLI（v1.1）
+
+`design-review` 命令不依赖 MCP/Claude Code，可在终端/脚本/CI 直接跑（同一套 pipeline + adapter + 知识库）：
+
+```bash
+design-review plan path/to/plan.md --output markdown       # 审方案（文件）
+cat plan.md | design-review plan -                          # stdin
+design-review plan --text "# 方案..." --dimensions planner  # 直接传文本
+design-review code src/a.py src/b.py --output sarif --output-file out.sarif  # 审代码 → SARIF
+design-review doc rfc.md --type rfc                         # 审文档（markdown/adr/rfc/config）
+```
+
+输入：`plan`/`doc` 接文件路径 / `-`（stdin）/ `--text`；`code` 接多文件。输出 `--output json|markdown|sarif`（默认 json 整 dict；md/sarif 输出 `rendered`），`--output-file` 写文件。其余参数同 MCP 工具（`--panel`/`--dimensions`/`--effort`/`--max-cost-usd`/`--adapter`/`--retrieve-top-k`/`--timeout`）。
+
+### SARIF + CI 集成
+
+`--output sarif` 生成 SARIF 2.1.0（consensus/majority → results，severity→error/warning/note，带 calibrated_confidence/flagged_by/case_ref），可进 GitHub Code Scanning / IDE。在 CI 里用 design-review 审查代码（dogfooding 或审任意项目）：
+
+```yaml
+# .github/workflows/design-review.yml
+on: [pull_request]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uvx --from git+https://github.com/fanghaoling/design-review-mcp design-review code src/ --output sarif --output-file dr.sarif
+        env: {OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}, ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}}
+      - uses: github/codeql-action/upload-sarif@v3
+        with: {sarif_file: dr.sarif}
+```
+
+> ⚠️ 真实审查要付费 API key，用 GitHub Secrets，**别硬编码进公开 repo**。没配 key 时跳过此 job——本地手动 `design-review ... --output sarif` 同样能审。
+
 ## 成本与思考强度控制（v1.5）
 
 两个 opt-in 参数，默认都不启用（向后兼容，老调用不变）：
@@ -186,8 +221,11 @@ API key 走环境变量（litellm 约定）：
 ## 开发
 
 ```bash
-uv run pytest tests/
+uv run pytest tests/        # 测试（mock ModelBackend，不调网）
+uv run ruff check .         # lint
 ```
+
+push/PR 自动触发 GitHub Actions（`.github/workflows/ci.yml`）：Python 3.10/3.11/3.12 矩阵跑 ruff + pytest。
 
 ## License
 

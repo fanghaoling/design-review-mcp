@@ -9,7 +9,7 @@ import json
 import logging
 import re
 
-from ..pipeline import PipelineContext, Stage
+from ..pipeline import PipelineContext
 from ..report import Finding
 from ..schema import get_schema
 
