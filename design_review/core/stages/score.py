@@ -60,6 +60,11 @@ class ScoreStage:
             for it in ctx.responses
             if not it["response"].ok
         ]
+        # v1.8 parse 失败可见性：temperature 0.6 等致 JSON 解析失败的模型，进 failed_models(parse_error)
+        failed += [
+            {"model": m, "error": "输出无法解析为 JSON", "type": "parse_error", "hint": "降低该 reviewer temperature 或检查输出"}
+            for m in ctx.parse_failed
+        ]
         total_tokens = 0
         cost = 0.0
         for it in ctx.responses:
@@ -104,6 +109,7 @@ class ScoreStage:
             + (f" budget_trimmed={ctx.jobs_run}/{ctx.jobs_total}" if ctx.budget_exhausted else ""),
             risk={"overall_level": overall, "high_severity_count": high_count},
             privacy=dict(ctx.privacy_meta),
+            context_compression=dict(ctx.context_compression),
         )
         ctx.report = report
         return ctx

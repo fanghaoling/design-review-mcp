@@ -31,6 +31,9 @@ _BUILTINS = {
     "endpoints": {},
     # v1.7 隐私/脱敏策略（{policy: off|strict, trusted:{endpoint,model,label}, min_coverage}）。None/off=不脱敏
     "privacy_policy": None,
+    # v1.8 发散/可行性维度：per-dimension 上下文压缩策略 + 压缩下限
+    "context_modes": {},
+    "min_compressed_chars": 50,
 }
 
 
@@ -56,7 +59,7 @@ def _coerce(key: str, val: str):
             return float(val)
         except ValueError:
             return val
-    if key in ("max_tokens", "consensus_threshold", "retrieve_top_k"):
+    if key in ("max_tokens", "consensus_threshold", "retrieve_top_k", "min_compressed_chars"):
         try:
             return int(val)
         except ValueError:

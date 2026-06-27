@@ -70,6 +70,7 @@ class ReviewReport:
     summary: str = ""
     risk: dict = field(default_factory=dict)  # {overall_level, top_risks}；v3 细化
     privacy: dict = field(default_factory=dict)  # v1.7 {policy, coverage, missing_topics, trusted}
+    context_compression: dict = field(default_factory=dict)  # v1.8 {dim: {mode, original_chars, compressed_chars, ratio}}
 
     def to_dict(self) -> dict:
         """序列化为 JSON 友好的 dict（JSONRenderer / MCP 工具返回用）。"""
@@ -94,4 +95,5 @@ class ReviewReport:
             "summary": self.summary,
             "risk": dict(self.risk),
             "privacy": dict(self.privacy),
+            "context_compression": dict(self.context_compression),
         }

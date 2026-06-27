@@ -284,10 +284,16 @@ async def review_document(
 
     engine = _build_engine(ad, dd)
     doc = ReviewDocument(type=document_type, content=content or "", files=files)
+    # v1.8 context_modes 校验（Fail Fast：用户配置错不该偷偷 fallback）+ 透传
+    context_modes = dd.get("context_modes") or {}
+    for dim, mode in context_modes.items():
+        if mode not in ("full", "compressed", "minimal"):
+            raise ValueError(f"context_modes.{dim}={mode!r} 无效（full|compressed|minimal）")
     ctx = await engine.review(
         doc, panel=panel_used, dimensions=dims_used,
         retrieve_top_k=int(dd["retrieve_top_k"]), extra_context=extra_context,
         effort=dd.get("effort"), max_cost_usd=dd.get("max_cost_usd"),
+        context_modes=context_modes,
     )
     report = ctx.report
     report_dict = report.to_dict()

@@ -33,6 +33,11 @@ class PipelineContext:
     policy: Any = None  # PrivacyPolicy（None=不脱敏，PromptStage 拿原文）
     original_document: Any = None  # 原文（Mediate 看全文）；ctx.document 是 effective（脱敏摘要 or 原文）
     privacy_meta: dict = field(default_factory=dict)  # {policy, coverage, missing_topics, trusted}
+    # v1.8 发散/可行性维度：
+    context_modes: dict = field(default_factory=dict)  # {dim: full|compressed|minimal}
+    context_compression: dict = field(default_factory=dict)  # {dim: {mode, original_chars, compressed_chars, ratio}}
+    parse_failed: list = field(default_factory=list)  # ParseStage 解析失败的 model label
+    min_compressed_chars: int = 50  # v1.8 _compress_document 下限
     # 各 Stage 填充：
     project_version: dict[str, str] = field(default_factory=dict)
     retrieved_cases: list = field(default_factory=list)

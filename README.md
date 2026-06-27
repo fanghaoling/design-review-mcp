@@ -164,6 +164,25 @@ API key 走环境变量（litellm 约定）：
 
 **为未来扩展**：privacy 是一级模块（`privacy/{base,off,strict}.py`），`PrivacyPolicy` Protocol + `FindingAttachment` 为 Enterprise/PII/Regex/AST/CompositePolicy 留接口，core/pipeline 不动即可加新 policy（如 `privacy/enterprise.py` 实现 Protocol + 新 attachment type）。
 
+## 发散 + 可行性维度（v1.8）
+
+默认维度（planner/safety/ecs_perf/architecture）都是**收敛审查**（找方案漏洞）。v1.8 加两个互补维度：
+
+- **visionary**（发散）：不找方案对错，基于压缩上下文发散**架构演进/后续路线/横向拓展**，给参考方向。`temperature 0.6`，不 inherits base，evidence = 项目依据（非方案原文）。
+- **feasibility**（可行性）：整体 **go/no-go**（值不值得做/最大阻塞/优先级三件事/何时停），与 planner 互补（planner 找设计漏洞，feasibility 评整体）。`temperature 0.3`，inherits base（evidence 引用方案原文），输出含一条「整体 verdict」finding。
+
+**context_mode 是 per-dimension 策略**（config，非 reviewer 属性——同一 planner 也能跑 minimal 看根本问题）：
+```jsonc
+{
+  "context_modes": {"visionary": "compressed"}  // full(默认)|compressed(去 code 保 headings)|minimal(首段)
+}
+```
+报告 `context_compression` 显示每维度压缩比；temperature 0.6 致 JSON 解析失败的模型进 `failed_models(parse_error)`（失败可见）。
+
+**启用**：`dimensions=["visionary","feasibility"]` + config `context_modes.visionary=compressed`（不配 context_modes 则 full，visionary 仍发散但被方案锚定）。
+
+**发散是参考**：visionary 给「可能的方向」，你来判断要不要走，别当「必须做的事」。
+
 ## 开发
 
 ```bash

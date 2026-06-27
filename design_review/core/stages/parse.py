@@ -139,6 +139,7 @@ class ParseStage:
             obj = extract_json_object(r.content)
             if obj is None:
                 logger.warning("模型 %s(%s) 输出无法解析为 JSON", model, dim)
+                ctx.parse_failed.append(model)  # v1.8 parse 失败可见性（→ failed_models）
                 continue
             issues = obj.get("issues") if isinstance(obj.get("issues"), list) else []
             for f in issues:
