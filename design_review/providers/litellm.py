@@ -13,7 +13,11 @@ from __future__ import annotations
 import logging
 import re
 
+import litellm
+
 from .base import ModelResponse
+
+litellm.suppress_debug_info = True  # 抑制 litellm stdout banner（CLI/MCP stdout 要纯 JSON/JSON-RPC）
 
 logger = logging.getLogger("design_review.provider.litellm")
 

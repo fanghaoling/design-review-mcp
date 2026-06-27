@@ -38,6 +38,7 @@ class PipelineContext:
     context_compression: dict = field(default_factory=dict)  # {dim: {mode, original_chars, compressed_chars, ratio}}
     parse_failed: list = field(default_factory=list)  # ParseStage 解析失败的 model label
     min_compressed_chars: int = 50  # v1.8 _compress_document 下限
+    reliability: dict = field(default_factory=dict)  # v2 {(label,dim):0~1} 模型可信度，server 注入；空→全1.0 不加权
     # 各 Stage 填充：
     project_version: dict[str, str] = field(default_factory=dict)
     retrieved_cases: list = field(default_factory=list)

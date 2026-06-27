@@ -31,13 +31,31 @@ def _mediation_factor(cf) -> float:
     return worst
 
 
-def _calibrate(cf, retrieved_ids: set[str]) -> float:
+def _reliability_factor(src, reliability: dict | None) -> float:
+    """v2：按 (label, dimension) 历史采纳率调权。reliability={(label,dim):0~1}。
+
+    温和区间 [0.75,1.15]——reliability 是补充信号，不压没 confidence/consensus
+    （consensus_factor/med 已负责激进降权到 0.2~0.3）。无 reliability/缺失 key → 1.0（向后兼容）。
+    """
+    if not reliability:
+        return 1.0
+    rels = [
+        reliability.get((getattr(f, "model", ""), getattr(f, "dimension", "")), 1.0)
+        for f in src
+    ]
+    if not rels:
+        return 1.0
+    return max(0.75, min(1.15, sum(rels) / len(rels)))
+
+
+def _calibrate(cf, retrieved_ids: set[str], reliability: dict | None = None) -> float:
     src = cf.source_findings or []
     base = sum(getattr(f, "confidence", 0.5) for f in src) / max(len(src), 1)
     factor = _CONSENSUS_FACTOR.get(cf.bucket, 0.3)
     km = 1.2 if (cf.case_ref and cf.case_ref in retrieved_ids) else 0.9
     med = _mediation_factor(cf)  # v1.7 trusted 中介调权
-    return round(min(base * factor * km * med, 1.0), 3)
+    rel = _reliability_factor(src, reliability)  # v2 模型可信度（温和补充信号）
+    return round(min(base * factor * km * med * rel, 1.0), 3)
 
 
 class ScoreStage:
@@ -49,7 +67,7 @@ class ScoreStage:
         for cf in ctx.consensus + ctx.majority:
             if cf.case_ref and cf.case_ref in retrieved_ids:
                 knowledge_hit.append(cf.case_ref)
-            cf.calibrated_confidence = _calibrate(cf, retrieved_ids)
+            cf.calibrated_confidence = _calibrate(cf, retrieved_ids, ctx.reliability)
 
         failed = [
             {

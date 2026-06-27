@@ -218,6 +218,40 @@ jobs:
 
 **发散是参考**：visionary 给「可能的方向」，你来判断要不要走，别当「必须做的事」。
 
+## Review Memory + 模型可信度（v2）
+
+工具会**记住你对 finding 的采纳反馈**，按 `(模型, 维度)` 历史采纳率给后续 review 的共识加权——采纳率高的模型 finding 置信度提升，低的降权。这是飞轮：用得越多，工具越懂「哪些模型的哪些维度对你更准」。
+
+### 标记 finding
+
+review 返回的每条 finding 带 `id`，报告带 `params_hash`。标记采纳：
+
+```python
+# MCP 工具（Claude Code 内）或 CLI 后手动
+mark_finding(finding_id="gpt-4o-3", decision="rejected", params_hash="abc123…", note="误报")
+mark_finding(finding_id="claude-1", decision="accepted", params_hash="abc123…", note="真实漏洞")
+```
+
+- `decision`：`accepted` | `rejected` | `partial`
+- `params_hash`：从 review 返回取（未传则按 finding_id 反查最近含此 id 的 review，扫 consensus+majority+individual+deduped_ids）
+- `note`：decision reason 自由文本（未来 v3 可分析误报类型）
+- 标记后默认失效该 review 缓存，下次同内容审查重算 reliability
+
+### reliability 机制
+
+- **(label, dimension) 维度**：同模型不同维度能力差异大（Claude planner 强 / ecs_perf 弱），按 `(label, dimension)` 分开统计不平均化。dimension = reviewer 身份（planner/safety/ecs_perf/...）；reviewer prompt 大改时升 dimension 名（planner-v2）隔离历史 reliability。
+- **Beta(2,2) 拉普拉斯**：`(采纳分+2)/(样本数+4)`，accepted=1/partial=0.5/rejected=0。全采纳不达 1、全拒不归 0，保留可见性。
+- **小样本保护**：每 `(label,dim)` 样本 <5 → reliability=1.0（不加权，向后兼容）。冷启动期全 1.0 无害。
+- **温和区间 [0.75, 1.15]**：reliability 是补充信号，不压没 confidence/consensus（consensus_factor/med 已负责激进降权）。差模型最多降到 ×0.75，好模型最多升到 ×1.15。
+
+### 数据位置 + 隔离
+
+反馈存 SQLite（`$UNITY_PROJECT_ROOT/Assets/Generated/AIGenerated/design_reviews.db` 的 `finding_feedback` 表），**per-project**——不同项目不同 db 文件天然隔离不互染。
+
+### 不做 DebateStage（调研否决）
+
+v2 路线图原含 DebateStage（多轮辩论）+ Judge。联网调研（2024-2026 顶会论文：Talk Isn't Always Cheap / If MAD is the Answer / Debate or Vote NeurIPS 2025 / Should We Be Going MAD ICML 2024）否决多轮辩论用于审查任务：MMLU 掉 9-12 分，sycophancy/过早收敛/弱模型腐蚀强模型；**投票/共识才是有效部分**（工具现有的 consensus/majority/individual）。故 v2 改做飞轮，不做辩论。
+
 ## 开发
 
 ```bash

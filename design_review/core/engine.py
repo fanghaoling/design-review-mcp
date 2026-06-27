@@ -43,6 +43,7 @@ class ReviewEngine:
         max_cost_usd: float | None = None,
         policy: Any = None,  # v1.7 PrivacyPolicy（None=不脱敏）
         context_modes: dict | None = None,  # v1.8 per-dimension 上下文压缩 {dim: full|compressed|minimal}
+        reliability: dict | None = None,  # v2 {(label,dim):0~1} 模型可信度（server 算好纯 dict 注入，core 不依赖 reviews_db）
     ) -> PipelineContext:
         """跑一次完整审查，返回填充好的 PipelineContext（含 ctx.report）。"""
         policy = policy if policy is not None else self.policy  # v1.7 默认用 engine 装配的 policy
@@ -82,6 +83,7 @@ class ReviewEngine:
             max_cost_usd=max_cost_usd if max_cost_usd is not None else self.defaults.get("max_cost_usd"),
             context_modes=context_modes if context_modes is not None else (self.defaults.get("context_modes") or {}),
             min_compressed_chars=int(self.defaults.get("min_compressed_chars", 50)),
+            reliability=reliability or {},
             original_document=document,
             policy=policy,
             privacy_meta=privacy_meta,

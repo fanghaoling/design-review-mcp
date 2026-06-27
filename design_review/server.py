@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -177,6 +178,12 @@ def _rebuild_report(d: dict) -> ReviewReport:
     def _cf(c: dict) -> CanonicalFinding:
         return CanonicalFinding(**{k: v for k, v in c.items() if k in cf_fields})
 
+    def _f(f: dict, fallback_id: str) -> Finding:
+        kw = {k: v for k, v in f.items() if k in f_fields}
+        if not kw.get("id"):  # v2 旧缓存 finding 无 id → 就地补填（让旧 review 也能被 mark_finding）
+            kw["id"] = fallback_id
+        return Finding(**kw)
+
     return ReviewReport(
         document_type=d.get("document_type", ""),
         adapter=d.get("adapter", ""),
@@ -187,14 +194,15 @@ def _rebuild_report(d: dict) -> ReviewReport:
         consensus=[_cf(c) for c in d.get("consensus", [])],
         majority=[_cf(c) for c in d.get("majority", [])],
         individual={
-            k: [Finding(**{kk: vv for kk, vv in f.items() if kk in f_fields})
-                for f in v]
+            k: [_f(f, f"{k}-{idx}") for idx, f in enumerate(v)]
             for k, v in d.get("individual", {}).items()
         },
         knowledge_hit=d.get("knowledge_hit", []),
         usage=d.get("usage", {}),
         summary=d.get("summary", ""),
         risk=d.get("risk", {}),
+        privacy=d.get("privacy", {}),  # v2 修 bug：缓存命中补回（原 :197 risk= 后停漏了）
+        context_compression=d.get("context_compression", {}),
     )
 
 
@@ -212,6 +220,72 @@ def ping() -> dict:
     from . import __version__
 
     return {"ok": True, "name": "design_review", "version": __version__}
+
+
+# v2 Review Memory：标记 finding 采纳，写入 reliability 飞轮
+_FINDING_ID_RE = re.compile(r"^.+-\d+$")
+
+
+def _label_from_id(finding_id: str) -> str:
+    """从 finding_id '{label}-{seq}' 解析 label（rsplit 仅 fallback；主路径查 report）。
+    label 可含 '-'/'/'（如 "智谱-Anthropic端点"、"zai/glm-5.2"）——rsplit('-',1) 只切末尾 seq。"""
+    return finding_id.rsplit("-", 1)[0] if "-" in finding_id else finding_id
+
+
+@mcp.tool()
+def mark_finding(
+    finding_id: str,
+    decision: str,
+    params_hash: str | None = None,
+    note: str = "",
+    invalidate_cache: bool = True,
+) -> dict:
+    """标记一条 finding 的采纳情况，写入 Review Memory，供下次 review 模型可信度加权。
+
+    finding_id/params_hash 从 review_document 返回取。未传 params_hash 时按 finding_id
+    反查最近含此 id 的 review（扫 consensus+majority+individual+deduped_ids）。
+    decision: accepted|rejected|partial。标记后默认失效该 review 缓存，下次同内容审查重算
+    reliability（该模型该维度按历史采纳率降/升权）。note 是 decision reason 自由文本。
+    """
+    if not finding_id or not _FINDING_ID_RE.match(finding_id):
+        raise ValueError(f"finding_id 格式无效（应为 '{{label}}-{{seq}}'）: {finding_id!r}")
+    if decision not in reviews_db.VALID_DECISIONS:
+        raise ValueError(f"decision 必须是 {sorted(reviews_db.VALID_DECISIONS)}，得到 {decision!r}")
+    try:
+        if params_hash is not None:
+            phash = params_hash
+            report = reviews_db.lookup_report(phash)
+            if report is None:
+                raise ValueError(f"params_hash={phash[:8]}… 找不到缓存 review")
+            scanned = reviews_db._scan_report_for_finding(report, finding_id)
+            if scanned is None:
+                raise ValueError(f"review {phash[:8]}… 中找不到 finding_id={finding_id!r}")
+            label, dimension = scanned
+        else:
+            phash, label, dimension = reviews_db.lookup_review_by_finding(finding_id)
+            if phash is None:
+                raise ValueError(f"找不到含 finding_id={finding_id!r} 的 review，请显式传 params_hash")
+            if not label:  # deduped_ids 分支 label 可能空 → rsplit fallback
+                label = _label_from_id(finding_id)
+            if not dimension:
+                dimension = ""
+        if not label:
+            raise ValueError(f"无法确定 finding_id={finding_id!r} 的 model label")
+
+        reviews_db.record_feedback(
+            finding_id=finding_id, params_hash=phash, label=label,
+            dimension=dimension, decision=decision, note=note,
+        )
+        invalidated = reviews_db.invalidate_review_cache(phash) if invalidate_cache else False
+        return {
+            "ok": True, "finding_id": finding_id, "params_hash": phash,
+            "label": label, "dimension": dimension, "decision": decision,
+            "cache_invalidated": invalidated,
+        }
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 — 不抛错，返回 ok=False（v1.8 降级规范）
+        return {"ok": False, "finding_id": finding_id, "error": str(e)}
 
 
 @mcp.tool()
@@ -277,6 +351,7 @@ async def review_document(
         result = dict(cached["report"])
         result["cache_hit"] = True
         result["reuse_count"] = cached["reuse_count"]
+        result["params_hash"] = phash  # v2 mark_finding 引用
         if output_format != "json":
             result["rendered"] = output.render(_rebuild_report(cached["report"]), output_format)
         return result
@@ -288,17 +363,20 @@ async def review_document(
     for dim, mode in context_modes.items():
         if mode not in ("full", "compressed", "minimal"):
             raise ValueError(f"context_modes.{dim}={mode!r} 无效（full|compressed|minimal）")
+    # v2 模型可信度（纯 dict 注入 core，core 不依赖 reviews_db；命中分支不重算——用缓存的 calibrated）
+    reliability = reviews_db.model_reliability([e["label"] for e in panel_used])
     ctx = await engine.review(
         doc, panel=panel_used, dimensions=dims_used,
         retrieve_top_k=int(dd["retrieve_top_k"]), extra_context=extra_context,
         effort=dd.get("effort"), max_cost_usd=dd.get("max_cost_usd"),
-        context_modes=context_modes,
+        context_modes=context_modes, reliability=reliability,
     )
     report = ctx.report
     report_dict = report.to_dict()
     reviews_db.record(phash, report_dict=report_dict, adapter=ad.name, panel=panel_used)
     result = dict(report_dict)
     result["cache_hit"] = False
+    result["params_hash"] = phash  # v2 mark_finding 引用
     if output_format != "json":
         result["rendered"] = output.render(report, output_format)
     return result

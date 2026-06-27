@@ -130,9 +130,10 @@ class ParseStage:
     name = "parse"
 
     async def process(self, ctx: PipelineContext) -> PipelineContext:
+        counters: dict[str, int] = {}  # v2 label → 已产出 finding 数（生成评审内稳定 id）
         for item in ctx.responses:
             r = item["response"]
-            model = item["model"]
+            model = item["model"]  # = label（review.py:101 身份标识设计）
             dim = item["dimension"]
             if not r.ok:
                 continue
@@ -151,8 +152,11 @@ class ParseStage:
                         str(f.get("title", ""))[:40] if isinstance(f, dict) else "?",
                     )
                     continue
+                seq = counters.get(model, 0)
+                counters[model] = seq + 1
                 ctx.findings.append(
                     Finding(
+                        id=f"{model}-{seq}",  # v2 评审内稳定 id，mark_finding 引用
                         model=model,
                         dimension=nf.get("dimension", dim),
                         severity=nf["severity"],

@@ -25,7 +25,9 @@ class Finding:
     suggestion: str
     confidence: float  # 模型自报 0~1
     case_ref: str | None = None
+    id: str = ""  # v2 评审内稳定 id "{label}-{seq}"，ParseStage 填；Review Memory 标记用
     attachments: list = field(default_factory=list)  # v1.7 FindingAttachment[{source,type,payload}]，immutable 附加
+    deduped_ids: list = field(default_factory=list)  # v2 断链点A：被去重 finding 的 id 挂代表上，mark_finding 反查
 
 
 @dataclass

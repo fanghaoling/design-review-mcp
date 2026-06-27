@@ -66,8 +66,19 @@ class DedupStage:
                         break
                 if dup_idx is None:
                     kept.append(f)
-                elif f.confidence > kept[dup_idx].confidence:
-                    kept[dup_idx] = f  # 留 confidence 更高的代表
+                else:
+                    rep = kept[dup_idx]
+                    if f.confidence > rep.confidence:
+                        # f 取代代表：旧代表 id + 其已收集的 deduped_ids 带到 f（断链点A 防 id 断链）
+                        inherited = list(rep.deduped_ids)
+                        if rep.id:
+                            inherited.append(rep.id)
+                        f.deduped_ids = inherited
+                        kept[dup_idx] = f  # 留 confidence 更高的代表
+                    else:
+                        # f 被丢弃：id 挂代表 deduped_ids（断链点A，mark_finding 反查 deduped_ids）
+                        if f.id:
+                            rep.deduped_ids = list(rep.deduped_ids) + [f.id]
             out.extend(kept)
 
         dropped = len(ctx.findings) - len(out)
