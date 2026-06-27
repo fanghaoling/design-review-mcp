@@ -75,9 +75,17 @@ class ScoreStage:
             majority=list(ctx.majority),
             individual={k: list(v) for k, v in ctx.individual.items()},
             knowledge_hit=sorted(set(knowledge_hit)),
+            budget={
+                "max_usd": ctx.max_cost_usd,
+                "estimated_usd": round(ctx.estimated_cost_usd, 6),
+                "jobs_run": ctx.jobs_run,
+                "jobs_total": ctx.jobs_total,
+                "exhausted": ctx.budget_exhausted,
+            },
             usage={"total_tokens": total_tokens, "cost_usd": round(cost, 6)},
             summary=f"consensus={len(ctx.consensus)} majority={len(ctx.majority)} "
-            f"individual={ind_count} failed={len(failed)}",
+            f"individual={ind_count} failed={len(failed)}"
+            + (f" budget_trimmed={ctx.jobs_run}/{ctx.jobs_total}" if ctx.budget_exhausted else ""),
             risk={"overall_level": overall, "high_severity_count": high_count},
         )
         ctx.report = report

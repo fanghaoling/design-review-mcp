@@ -93,6 +93,15 @@ API key 走环境变量（litellm 约定）：
 }
 ```
 
+## 成本与思考强度控制（v1.5）
+
+两个 opt-in 参数，默认都不启用（向后兼容，老调用不变）：
+
+- **`max_cost_usd`**（单次 review 总成本上限 USD，默认 None=无上限）：预 flight 估每个 job 成本，按 panel 顺序（用户偏好序）贪心保留直到估算超预算，其余裁掉。报告 `budget.exhausted` 标记是否裁过。贵模型（Claude/GPT）走手维护价表，glm/deepseek 等用名义单价。
+- **`effort`**（思考强度 low/medium/high/xhigh/max，默认 None=各模型默认）：仅 Claude（`output_config`+thinking adaptive）/ OpenAI o 系列（`reasoning_effort`）生效，其余丢弃。Claude 默认 high 较贵，routine 方案降 medium 省 token。
+
+两个都能进 `design_review_config.json` 设默认（如 `"max_cost_usd": 0.3`），也可每次调用显式传。估的是上界（输出按 max_tokens 打满），故略保守；实际成本见报告 `usage.cost_usd`。
+
 ## 开发
 
 ```bash

@@ -49,4 +49,5 @@ class ModelBackend(Protocol):
         temperature: float = 0.3,
         top_p: float = 0.95,
         max_tokens: int = 4096,
+        effort: str | None = None,
     ) -> ModelResponse: ...

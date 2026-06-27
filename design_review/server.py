@@ -142,6 +142,8 @@ async def review_document(
     extra_context: str = "",
     output_format: str = "json",
     timeout: float | None = None,
+    effort: str | None = None,
+    max_cost_usd: float | None = None,
 ) -> dict:
     """审查一份文档（markdown/code/adr/rfc/config）。
 
@@ -159,13 +161,15 @@ async def review_document(
         extra_context: 额外补充 context（核心 context 由 adapter 自动聚合）。
         output_format: json|markdown|sarif。json 返回结构化；其余额外加 rendered 字段。
         timeout: 单模型超时秒。
+        effort: 思考强度 low/medium/high/xhigh/max；None=各模型默认。仅 Claude（output_config+thinking adaptive）/ OpenAI o 系列（reasoning_effort）生效，其余丢弃。Claude 默认 high 较贵，routine 方案可降 medium 省 token。
+        max_cost_usd: 单次 review 总成本上限（USD）；None=无上限。设了则预 flight 估每 job 成本、按 panel 顺序裁剪直到估算超预算，report.budget.exhausted 标记是否裁过。
 
     Returns:
         报告 dict + cache_hit/reuse_count（+ rendered 若非 json）。
     """
     dd = _defaults_mod.apply(
         panel=panel, dimensions=dimensions, retrieve_top_k=retrieve_top_k,
-        output_format=output_format, timeout=timeout,
+        output_format=output_format, timeout=timeout, effort=effort, max_cost_usd=max_cost_usd,
     )
     panel_used = dd["panel"]
     dims_used = dd["dimensions"]
@@ -198,6 +202,7 @@ async def review_document(
     ctx = await engine.review(
         doc, panel=panel_used, dimensions=dims_used,
         retrieve_top_k=int(dd["retrieve_top_k"]), extra_context=extra_context,
+        effort=dd.get("effort"), max_cost_usd=dd.get("max_cost_usd"),
     )
     report = ctx.report
     report_dict = report.to_dict()
@@ -218,12 +223,15 @@ async def review_plan(
     retrieve_top_k: int = 5,
     extra_context: str = "",
     output_format: str = "json",
+    effort: str | None = None,
+    max_cost_usd: float | None = None,
 ) -> dict:
     """审查实现方案/计划（design-question 模式）。等价 review_document(document_type="markdown")。"""
     return await review_document(
         content=plan_text, document_type="markdown", files=None, adapter=adapter,
         panel=panel, dimensions=dimensions, retrieve_top_k=retrieve_top_k,
         extra_context=extra_context, output_format=output_format,
+        effort=effort, max_cost_usd=max_cost_usd,
     )
 
 
@@ -236,12 +244,15 @@ async def review_code(
     retrieve_top_k: int = 5,
     extra_context: str = "",
     output_format: str = "json",
+    effort: str | None = None,
+    max_cost_usd: float | None = None,
 ) -> dict:
     """审查代码实现（code-review 模式）。等价 review_document(document_type="code")。"""
     return await review_document(
         content="", document_type="code", files=files, adapter=adapter,
         panel=panel, dimensions=dimensions, retrieve_top_k=retrieve_top_k,
         extra_context=extra_context, output_format=output_format,
+        effort=effort, max_cost_usd=max_cost_usd,
     )
 
 

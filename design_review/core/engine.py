@@ -37,6 +37,8 @@ class ReviewEngine:
         dimensions: list[str] | None = None,
         retrieve_top_k: int = 5,
         extra_context: str = "",
+        effort: str | None = None,
+        max_cost_usd: float | None = None,
     ) -> PipelineContext:
         """跑一次完整审查，返回填充好的 PipelineContext（含 ctx.report）。"""
         ctx = PipelineContext(
@@ -48,6 +50,8 @@ class ReviewEngine:
             dimensions=list(dimensions or self.defaults.get("dimensions") or []),
             retrieve_top_k=retrieve_top_k,
             extra_context=extra_context,
+            effort=effort or self.defaults.get("effort"),
+            max_cost_usd=max_cost_usd if max_cost_usd is not None else self.defaults.get("max_cost_usd"),
         )
         await self.pipeline.run(ctx)
         return ctx

@@ -64,6 +64,7 @@ class ReviewReport:
     majority: list[CanonicalFinding] = field(default_factory=list)
     individual: dict[str, list[Finding]] = field(default_factory=dict)  # model -> findings
     knowledge_hit: list[str] = field(default_factory=list)  # 命中的 case ids
+    budget: dict = field(default_factory=dict)  # {max_usd, estimated_usd, jobs_run, jobs_total, exhausted}
     usage: dict = field(default_factory=dict)  # {total_tokens, cost_usd}
     summary: str = ""
     risk: dict = field(default_factory=dict)  # {overall_level, top_risks}；v3 细化
@@ -86,6 +87,7 @@ class ReviewReport:
             "majority": [dataclasses.asdict(c) for c in self.majority],
             "individual": {k: [_finding(f) for f in v] for k, v in self.individual.items()},
             "knowledge_hit": list(self.knowledge_hit),
+            "budget": dict(self.budget),
             "usage": dict(self.usage),
             "summary": self.summary,
             "risk": dict(self.risk),

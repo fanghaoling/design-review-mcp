@@ -24,6 +24,9 @@ _BUILTINS = {
     "timeout": 90,
     "normalizer_model": "claude-opus-4-8",
     "output_format": "json",
+    # v1.5 成本/思考强度控制（None=不启用：无成本上限 / 各模型用默认 effort）
+    "effort": None,
+    "max_cost_usd": None,
 }
 
 
@@ -44,7 +47,7 @@ def _load_config() -> dict:
 
 
 def _coerce(key: str, val: str):
-    if key in ("temperature", "timeout"):
+    if key in ("temperature", "timeout", "max_cost_usd"):
         try:
             return float(val)
         except ValueError:

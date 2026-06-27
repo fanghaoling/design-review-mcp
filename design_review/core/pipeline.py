@@ -27,6 +27,8 @@ class PipelineContext:
     dimensions: list[str] = field(default_factory=list)
     retrieve_top_k: int = 5
     extra_context: str = ""
+    effort: str | None = None  # low/medium/high/xhigh/max；None=各模型默认。Claude/OpenAI-o 才生效
+    max_cost_usd: float | None = None  # per-review 总成本上限；None=无上限
     # 各 Stage 填充：
     project_version: dict[str, str] = field(default_factory=dict)
     retrieved_cases: list = field(default_factory=list)
@@ -38,6 +40,11 @@ class PipelineContext:
     consensus: list = field(default_factory=list)  # ConsensusStage
     majority: list = field(default_factory=list)
     individual: dict = field(default_factory=dict)
+    # ReviewStage 预算裁剪结果（ScoreStage 进 report.budget）：
+    budget_exhausted: bool = False
+    jobs_run: int = 0
+    jobs_total: int = 0
+    estimated_cost_usd: float = 0.0
     report: Any = None  # ScoreStage: ReviewReport
 
 
