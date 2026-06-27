@@ -50,4 +50,5 @@ class ModelBackend(Protocol):
         top_p: float = 0.95,
         max_tokens: int = 4096,
         effort: str | None = None,
+        endpoint_id: str | None = None,
     ) -> ModelResponse: ...

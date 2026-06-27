@@ -72,11 +72,86 @@ def _knowledge_dirs(adapter) -> list:
     return dirs
 
 
+def _resolve_endpoints(cfg: dict) -> dict:
+    """config endpoints 块 -> {id: EndpointConfig{provider, base_url, api_key, headers, timeout}}。
+
+    api_key_env 优先（os.environ.get），fallback api_key 明文，都无 raise 清晰配置错误。
+    credential **只在此处解析**并交给 backend 持有，不进 PipelineContext。
+    """
+    registry: dict = {}
+    for eid, ep in (cfg or {}).items():
+        if not isinstance(ep, dict):
+            raise ValueError(f"endpoint {eid!r} 配置必须是对象")
+        provider = ep.get("provider")
+        if provider not in ("openai", "anthropic"):
+            raise ValueError(
+                f"endpoint {eid!r} provider 必须是 openai|anthropic（中转兼容网关协议），得到 {provider!r}。"
+                f"gemini/bedrock/vertex 等原生 provider 请用 litellm model 字符串（如 zai/glm-5.2）走 env，不走 endpoint。"
+            )
+        base_url = ep.get("base_url")
+        if not base_url:
+            raise ValueError(f"endpoint {eid!r} 缺 base_url")
+        api_key = None
+        env_name = ep.get("api_key_env")
+        if env_name:
+            api_key = os.environ.get(env_name)
+            if not api_key:
+                raise ValueError(f"endpoint {eid!r} api_key_env={env_name!r} 环境变量未设置或为空")
+        elif ep.get("api_key"):
+            api_key = ep["api_key"]
+        else:
+            raise ValueError(f"endpoint {eid!r} 缺 api_key_env 或 api_key")
+        registry[eid] = {
+            "provider": provider,
+            "base_url": base_url,
+            "api_key": api_key,
+            "headers": ep.get("headers") or {},
+            "timeout": ep.get("timeout"),
+        }
+    return registry
+
+
+def _normalize_panel(panel: list, endpoint_ids: set) -> list[dict]:
+    """panel（list[str|dict]）-> list[PanelEntry{label, model, endpoint_id}]。
+
+    str=官方（endpoint_id=None，走 litellm env）；dict={endpoint, model, label} 引用中转站。
+    校验 label 全局唯一（撞名报错——label 是身份标识，撞名会让 consensus 错误合并）。
+    PanelEntry **不含 credential**（key 只在 endpoint_registry，backend 边缘解析）。
+    """
+    entries: list[dict] = []
+    labels: set[str] = set()
+    for item in panel or []:
+        if isinstance(item, dict):
+            eid = item.get("endpoint")
+            if eid not in endpoint_ids:
+                raise ValueError(f"panel 项引用了未定义的 endpoint {eid!r}（config endpoints 里没声明）")
+            model = item.get("model")
+            if not model:
+                raise ValueError(f"panel 项（endpoint={eid}）缺 model")
+            label = item.get("label") or f"{eid}/{model}"
+        elif isinstance(item, str):
+            eid, model, label = None, item, item
+        else:
+            raise ValueError(f"panel 项必须是 str（官方模型）或 dict（中转引用），得到 {type(item).__name__}")
+        if label in labels:
+            raise ValueError(f"panel label 撞名：{label!r}（label 是模型身份标识，撞名会让 consensus 错误合并）")
+        labels.add(label)
+        entries.append({"label": label, "model": model, "endpoint_id": eid})
+    return entries
+
+
+def _normalize_one(spec, endpoint_ids: set) -> dict:
+    """单个 model 规格（str|dict）-> PanelEntry。供 normalizer 复用（schema 与 panel 统一）。"""
+    return _normalize_panel([spec], endpoint_ids)[0]
+
+
 def _build_engine(adapter, dd: dict) -> ReviewEngine:
-    backend = LiteLLMBackend(timeout=float(dd.get("timeout", 90)))
+    registry = _resolve_endpoints(dd.get("endpoints") or {})
+    endpoint_ids = set(registry.keys())
+    backend = LiteLLMBackend(timeout=float(dd.get("timeout", 90)), endpoint_registry=registry)
     knowledge = YamlKnowledgeProvider(_knowledge_dirs(adapter))
     pipeline = build_default_pipeline(
-        normalizer_model=dd.get("normalizer_model", "claude-opus-4-8"),
+        normalizer=_normalize_one(dd.get("normalizer_model", "claude-opus-4-8"), endpoint_ids),
         threshold=int(dd.get("consensus_threshold", 2)),
     )
     return ReviewEngine(
@@ -171,7 +246,7 @@ async def review_document(
         panel=panel, dimensions=dimensions, retrieve_top_k=retrieve_top_k,
         output_format=output_format, timeout=timeout, effort=effort, max_cost_usd=max_cost_usd,
     )
-    panel_used = dd["panel"]
+    panel_used = _normalize_panel(dd["panel"], set((dd.get("endpoints") or {}).keys()))
     dims_used = dd["dimensions"]
     root = os.environ.get("UNITY_PROJECT_ROOT", ".")
     ad = _resolve_adapter(adapter, root)

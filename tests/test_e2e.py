@@ -24,7 +24,7 @@ UNITY_PROJECT = Path(__file__).resolve().parents[3]
 
 
 class MockBackend:
-    async def complete(self, *, model, system, user, temperature=0.3, top_p=0.95, max_tokens=4096, effort=None):
+    async def complete(self, *, model, system, user, temperature=0.3, top_p=0.95, max_tokens=4096, effort=None, endpoint_id=None):
         if "归一化引擎" in system:
             m = re.search(r"```json\s*(\[.*?\])\s*```", user, re.DOTALL)
             items = json.loads(m.group(1)) if m else []

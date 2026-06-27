@@ -33,7 +33,7 @@ class ReviewEngine:
         self,
         document: ReviewDocument,
         *,
-        panel: list[str] | None = None,
+        panel: list[dict] | None = None,  # v1.6: PanelEntry{label, model, endpoint_id}（无 credential）
         dimensions: list[str] | None = None,
         retrieve_top_k: int = 5,
         extra_context: str = "",
@@ -41,12 +41,19 @@ class ReviewEngine:
         max_cost_usd: float | None = None,
     ) -> PipelineContext:
         """跑一次完整审查，返回填充好的 PipelineContext（含 ctx.report）。"""
+        raw_panel = list(panel or self.defaults.get("panel") or [])
+        # v1.6: 统一成 PanelEntry dict（str→官方 entry；dict 原样，server 已 normalize endpoint_id）。
+        # 让 engine 可直接被传 str 列表调用（测试/便捷），server 传 dict 也兼容。
+        normalized_panel = [
+            {"label": p, "model": p, "endpoint_id": None} if isinstance(p, str) else p
+            for p in raw_panel
+        ]
         ctx = PipelineContext(
             document=document,
             adapter=self.adapter,
             backend=self.backend,
             knowledge=self.knowledge,
-            panel=list(panel or self.defaults.get("panel") or []),
+            panel=normalized_panel,
             dimensions=list(dimensions or self.defaults.get("dimensions") or []),
             retrieve_top_k=retrieve_top_k,
             extra_context=extra_context,

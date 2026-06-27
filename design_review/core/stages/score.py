@@ -68,7 +68,7 @@ class ScoreStage:
             document_type=ctx.document.type,
             adapter=ctx.adapter.name,
             project_version=dict(ctx.project_version),
-            panel=list(ctx.panel),
+            panel=[e["label"] for e in ctx.panel],
             failed_models=failed,
             retrieved_cases=sorted(retrieved_ids),
             consensus=list(ctx.consensus),

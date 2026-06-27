@@ -94,8 +94,11 @@ class ReviewStage:
                 top_p=job["top_p"],
                 max_tokens=job["max_tokens"],
                 effort=ctx.effort,
+                endpoint_id=job.get("endpoint_id"),
             )
-            return {"model": job["model"], "dimension": job["dimension"], "response": resp}
+            # 身份标识用 label（贯穿 Finding.model/flagged_by/failed_models），防中转模型上游真名
+            # （如 glm-5.2）与官方 zai/glm-5.2 撞名致 consensus 错误合并。credential 不进 pipeline。
+            return {"model": job["label"], "dimension": job["dimension"], "response": resp}
 
         ctx.responses = await asyncio.gather(*(_one(j) for j in jobs))
         return ctx

@@ -38,12 +38,15 @@ CORE_REVIEWERS_DIR = Path(__file__).resolve().parent.parent / "reviewers"
 
 def build_default_pipeline(
     *,
-    normalizer_model: str = "claude-opus-4-8",
+    normalizer: dict | None = None,
     threshold: int = 2,
     core_reviewers_dir: str | Path | None = None,
     default_dimensions: list[str] | None = None,
 ) -> Pipeline:
-    """构造默认 9-stage pipeline。"""
+    """构造默认 9-stage pipeline。
+
+    normalizer: PanelEntry{model, endpoint_id}（v1.6 与 panel 统一 schema，可走中转）。
+    """
     crd = Path(core_reviewers_dir) if core_reviewers_dir else CORE_REVIEWERS_DIR
     return Pipeline(
         [
@@ -53,7 +56,7 @@ def build_default_pipeline(
             ReviewStage(),
             ParseStage(),
             DedupStage(),
-            NormalizeStage(normalizer_model),
+            NormalizeStage(normalizer),
             ConsensusStage(threshold),
             ScoreStage(),
         ]

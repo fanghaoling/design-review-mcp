@@ -27,6 +27,8 @@ _BUILTINS = {
     # v1.5 成本/思考强度控制（None=不启用：无成本上限 / 各模型用默认 effort）
     "effort": None,
     "max_cost_usd": None,
+    # v1.6 中转站/自定义 endpoint：{id: {provider: openai|anthropic, base_url, api_key_env|api_key, headers?, timeout?}}
+    "endpoints": {},
 }
 
 

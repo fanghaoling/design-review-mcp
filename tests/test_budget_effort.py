@@ -11,7 +11,8 @@ from design_review.providers.base import ModelResponse
 
 def _job(model: str, dim: str = "ecs_perf") -> dict:
     return {
-        "model": model, "dimension": dim, "system": "s", "user": "u",
+        "model": model, "label": model, "endpoint_id": None,
+        "dimension": dim, "system": "s", "user": "u",
         "temperature": 0.3, "top_p": 0.9, "max_tokens": 4096,
     }
 
@@ -22,7 +23,7 @@ class _FakeBackend:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    async def complete(self, *, model, system, user, temperature=0.3, top_p=0.9, max_tokens=4096, effort=None):
+    async def complete(self, *, model, system, user, temperature=0.3, top_p=0.9, max_tokens=4096, effort=None, endpoint_id=None):
         self.calls.append({"model": model, "effort": effort})
         return ModelResponse(model=model, content='{"issues":[]}', usage={}, cost_usd=0.01)
 

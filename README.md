@@ -102,6 +102,42 @@ API key 走环境变量（litellm 约定）：
 
 两个都能进 `design_review_config.json` 设默认（如 `"max_cost_usd": 0.3`），也可每次调用显式传。估的是上界（输出按 max_tokens 打满），故略保守；实际成本见报告 `usage.cost_usd`。
 
+## 中转站 / 自定义 endpoint（v1.6）
+
+让 panel 引用「中转站」（智谱 Anthropic 兼容端点、New API、one-api 等 OpenAI/Anthropic 兼容网关）提供的模型。在 `design_review_config.json` 声明 endpoint，panel 项用对象引用：
+
+```jsonc
+{
+  "endpoints": {
+    "zhipu": {
+      "provider": "anthropic",                       // 兼容网关协议：openai | anthropic
+      "base_url": "https://open.bigmodel.cn/api/anthropic",
+      "api_key_env": "ZHIPU_KEY",                    // 优先：从该环境变量读 key
+      // "api_key": "明文",                            // fallback（⚠️ 别让 config 进 git）
+      "headers": {},                                  // 可选：额外头（只认 Bearer 的站 / OpenRouter）
+      "timeout": 120                                  // 可选：覆盖全局 timeout（慢中转站）
+    }
+  },
+  "panel": [
+    "gpt-4o",                                         // str = 官方（litellm 原生 provider，走 env）
+    "zai/glm-5.2",                                    // litellm 原生 provider，走 env
+    {"endpoint": "zhipu", "model": "glm-5.2", "label": "智谱-Anthropic端点"}
+  ]
+}
+```
+
+**两类模型别混**：
+- **兼容网关 endpoint**（`provider: openai|anthropic`）：自定义 `base_url` 的 OpenAI/Anthropic 协议兼容端点（中转站）。用 `endpoints` + panel dict 引用，litellm 按 provider 拼 `openai/` 或 `anthropic/` 前缀 + per-call `api_base`/`api_key`。
+- **litellm 原生 provider**（`zai/`、`deepseek/`、`gemini/`、`bedrock/`、`vertex_ai/`...）：直接写 model 字符串走环境变量（如 `ZAI_API_KEY`），**不走 endpoint 机制**。
+
+**安全**：`api_key` 只在 server 解析后交给 backend 持有，不进审查 pipeline、不进缓存库（`PanelEntry` 只含 `{label, model, endpoint_id}`）。优先用 `api_key_env`，明文 `api_key` 仅作 fallback 且**别让 config.json 进 git**。
+
+**label 是模型身份标识**：报告里 `flagged_by`/`panel`/`failed_models` 用 label 显示。panel 内 label 必须唯一（撞名报错——否则 consensus 会把同名模型错误合并）。官方 str 项的 label = model 字符串本身。
+
+**headers / timeout**：某些中转站只认 `Authorization: Bearer`（不认 litellm 默认的 `x-api-key`），用 `"headers": {"Authorization": "Bearer ..."}` 绕开，或改走它的 OpenAI 兼容端点（`provider: openai`）；慢中转站用 `"timeout"` 覆盖全局。
+
+**升级注意**：从 v1.5 升级后首次 review 会 miss 缓存（hash 输入结构变，重跑一次即可，无数据损坏）。回滚到 v1.5 须把 panel 的 dict 项改回 str。
+
 ## 开发
 
 ```bash

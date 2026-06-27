@@ -51,6 +51,7 @@ class LiteLLMBackend:
         num_retries: int = 2,
         timeout: float = 60.0,
         response_format: dict | None = None,
+        endpoint_registry: dict | None = None,
     ) -> None:
         self.num_retries = num_retries
         self.timeout = timeout
@@ -58,6 +59,9 @@ class LiteLLMBackend:
         self.response_format = (
             response_format if response_format is not None else {"type": "json_object"}
         )
+        # v1.6：endpoint_id -> EndpointConfig{provider, base_url, api_key, headers, timeout}。
+        # credential 只存活在 backend 边缘（调用时查 registry），不进 PipelineContext。
+        self.endpoint_registry = endpoint_registry or {}
 
     async def complete(
         self,
@@ -69,27 +73,48 @@ class LiteLLMBackend:
         top_p: float = 0.95,
         max_tokens: int = 4096,
         effort: str | None = None,
+        endpoint_id: str | None = None,
     ) -> ModelResponse:
         import litellm  # 延迟 import
 
-        # 自动丢弃 provider 不支持的参数（zai/volcengine 不支持 response_format）。
+        # 自动丢弃 provider 不支持的参数（zai/volcengine/anthropic 兼容端不支持 response_format）。
         # 国产模型靠 prompt 强制 JSON + ParseStage 防御解析兜底。
         litellm.drop_params = True
 
+        # v1.6：中转站/自定义 endpoint。endpoint_id 查 registry 取 credential（key 不进 pipeline）。
+        # provider 决定 litellm model 前缀（openai/anthropic 是兼容网关协议）；endpoint_id=None 走官方 env。
+        ep = self.endpoint_registry.get(endpoint_id) if endpoint_id else None
+        litellm_model = model
+        ep_kwargs: dict = {}
+        if ep:
+            provider = ep.get("provider")
+            # 前缀守卫：model 已含 / （用户误写 openai/x）则不再拼，防 openai/openai/
+            if provider in ("openai", "anthropic") and "/" not in model:
+                litellm_model = f"{provider}/{model}"
+            if ep.get("base_url"):
+                ep_kwargs["api_base"] = ep["base_url"]  # snake_case！勿用 base_url（有历史 bug）
+            if ep.get("api_key"):
+                ep_kwargs["api_key"] = ep["api_key"]
+            if ep.get("headers"):
+                ep_kwargs["extra_headers"] = ep["headers"]
+        # endpoint timeout 覆盖全局（慢中转站）
+        call_timeout = ep.get("timeout") if ep and ep.get("timeout") else self.timeout
+
         try:
             resp = await litellm.acompletion(
-                model=model,
+                model=litellm_model,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
                 num_retries=self.num_retries,
-                timeout=self.timeout,
+                timeout=call_timeout,
                 temperature=temperature,
                 top_p=top_p,
                 max_tokens=max_tokens,
                 response_format=self.response_format,
-                **_effort_kwargs(model, effort),
+                **_effort_kwargs(litellm_model, effort),
+                **{k: v for k, v in ep_kwargs.items() if v is not None},
             )
             usage = resp.usage.model_dump() if getattr(resp, "usage", None) else {}
             hp = getattr(resp, "_hidden_params", None) or {}

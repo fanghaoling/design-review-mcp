@@ -22,8 +22,8 @@ class PipelineContext:
     adapter: Any  # ProjectAdapter
     backend: Any  # ModelBackend
     knowledge: Any  # KnowledgeProvider
-    # 调用参数：
-    panel: list[str] = field(default_factory=list)
+    # 调用参数（v1.6: panel 是 PanelEntry dict 列表 {label, model, endpoint_id}，不含 credential）：
+    panel: list[dict] = field(default_factory=list)
     dimensions: list[str] = field(default_factory=list)
     retrieve_top_k: int = 5
     extra_context: str = ""

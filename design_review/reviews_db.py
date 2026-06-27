@@ -61,7 +61,7 @@ def compute_hash(
     parts = [
         document_content or "",
         json.dumps(document_files or {}, sort_keys=True, ensure_ascii=False),
-        json.dumps(sorted(panel or []), ensure_ascii=False),
+        json.dumps(panel or [], sort_keys=True, ensure_ascii=False),
         json.dumps(sorted(dimensions or []), ensure_ascii=False),
         adapter or "",
         json.dumps(project_version or {}, sort_keys=True, ensure_ascii=False),

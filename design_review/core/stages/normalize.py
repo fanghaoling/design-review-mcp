@@ -115,24 +115,26 @@ def merge_canonical_by_case_ref(
 class NormalizeStage:
     name = "normalize"
 
-    def __init__(self, normalizer_model: str = "claude-opus-4-8") -> None:
-        self.model = normalizer_model
+    def __init__(self, normalizer: dict | None = None) -> None:
+        # v1.6: normalizer 也用 PanelEntry{model, endpoint_id}（schema 与 panel 统一，可走中转）。
+        self.normalizer = normalizer or {"model": "claude-opus-4-8", "endpoint_id": None}
 
     async def process(self, ctx: PipelineContext) -> PipelineContext:
         if not ctx.findings:
             return ctx
         system, user = _build_prompt(ctx.findings)
         resp = await ctx.backend.complete(
-            model=self.model,
+            model=self.normalizer["model"],
             system=system,
             user=user,
             temperature=0.1,
             top_p=0.9,
             max_tokens=4096,
+            endpoint_id=self.normalizer.get("endpoint_id"),
         )
         groups = _parse_groups(resp.content) if resp.ok else []
         if not groups:
-            logger.warning("归一失败(model=%s err=%s)，降级为每 finding 一组", self.model, resp.error)
+            logger.warning("归一失败(model=%s err=%s)，降级为每 finding 一组", self.normalizer["model"], resp.error)
             groups = [
                 {
                     "canonical_title": f.title,

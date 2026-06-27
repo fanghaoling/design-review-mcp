@@ -55,11 +55,13 @@ class PromptStage:
         reviewers = {d: _load_role(d, ctx.adapter, self.core_dir) for d in dims}
         schema_text = json.dumps(get_schema("finding"), ensure_ascii=False, indent=2)
         ctx.prompts = []
-        for model in ctx.panel:
+        for entry in ctx.panel:
             for dim, role in reviewers.items():
                 ctx.prompts.append(
                     {
-                        "model": model,
+                        "model": entry["model"],  # 上游真名（传 litellm）
+                        "label": entry["label"],  # 身份标识（贯穿 Finding.model/flagged_by）
+                        "endpoint_id": entry.get("endpoint_id"),  # None=官方走 env
                         "dimension": dim,
                         "system": _system(role, ctx.context),
                         "user": _user(ctx.document, role, dim, schema_text),
