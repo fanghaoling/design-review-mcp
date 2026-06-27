@@ -38,7 +38,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 mcp = FastMCP("design_review")
 
 from . import defaults as _defaults_mod  # noqa: E402
-from . import output, reviews_db  # noqa: E402
+from . import output, prior as prior_mod, reviews_db  # noqa: E402
 from .adapters.generic import GenericAdapter  # noqa: E402
 from .adapters.unity import UnityAdapter  # noqa: E402
 from .core.engine import ReviewEngine  # noqa: E402
@@ -364,7 +364,11 @@ async def review_document(
         if mode not in ("full", "compressed", "minimal"):
             raise ValueError(f"context_modes.{dim}={mode!r} 无效（full|compressed|minimal）")
     # v2 模型可信度（纯 dict 注入 core，core 不依赖 reviews_db；命中分支不重算——用缓存的 calibrated）
-    reliability = reviews_db.model_reliability([e["label"] for e in panel_used])
+    # v2.2 加 warm-start 先验（prior.load：mode 三态，默认 builtin 今天空=v2.1，official 填入自动生效）
+    reliability = reviews_db.model_reliability(
+        [e["label"] for e in panel_used],
+        prior=prior_mod.load(dd.get("model_reliability_prior")),
+    )
     ctx = await engine.review(
         doc, panel=panel_used, dimensions=dims_used,
         retrieve_top_k=int(dd["retrieve_top_k"]), extra_context=extra_context,

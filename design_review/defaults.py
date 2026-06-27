@@ -34,6 +34,10 @@ _BUILTINS = {
     # v1.8 发散/可行性维度：per-dimension 上下文压缩策略 + 压缩下限
     "context_modes": {},
     "min_compressed_chars": 50,
+    # v2.2 模型可信度先验（warm-start）：{mode: none|builtin|custom, custom: {...}}。
+    # mode=builtin 默认（读 presets/model_reliability_prior.yaml，今天空=v2.1，official 填入自动生效）；
+    # custom 在 builtin 基础上覆盖（{label:{dim:{r,kappa}}}）；none 完全禁用。详见 prior.py。
+    "model_reliability_prior": {"mode": "builtin", "custom": {}},
 }
 
 

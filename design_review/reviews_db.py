@@ -198,11 +198,18 @@ def record_feedback(
         logger.warning("reviews_db record_feedback 失败: %s", e)
 
 
-def model_reliability(panel_labels: list[str]) -> dict[tuple[str, str], float]:
-    """按 (label, dimension) 聚合历史采纳率（reliability）。
+def model_reliability(
+    panel_labels: list[str], prior: dict | None = None
+) -> dict[tuple[str, str], float]:
+    """按 (label, dimension) 聚合 reliability（v2.2 加 prior warm-start）。
 
-    返回 {(label, dimension): 0~1}。accepted=1/partial=0.5/rejected=0，Beta(2,2) 拉普拉斯
-    (score+2)/(n+4)。每 (label,dim) 样本 <5 → 不进结果（调用方 .get(key,1.0) 兜底）。
+    prior: {(label,dim):(alpha,beta)} 公共先验（来自 prior.load()，warm-start）。None/{}=纯本地。
+    返回 {(label, dimension): 0~1}。4 分支：
+      1. 有本地 + 有先验 → Beta 共轭后验 (α+score)/(α+β+n)（Raykar 2010 / Efron-Morris 1973）
+      2. 有本地 + 无先验 + n≥5 → Beta(2,2) 拉普拉斯 (score+2)/(n+4)（v2.1 现状）
+      3. 有本地 + 无先验 + n<5 → 不进 out（.get 兜底 1.0，向后兼容）
+      4. 无本地 + 有先验 → 先验均值 α/(α+β)（冷启动 warm-start）
+    prior=None 时只走分支 2/3 + 不冷启动 → 逐字节同 v2.1（向后兼容）。
     空 panel_labels → {}（防 SQL IN() 语法错）。DB 异常 → {}（降级全 1.0 不加权）。
     """
     if not panel_labels:
@@ -219,12 +226,26 @@ def model_reliability(panel_labels: list[str]) -> dict[tuple[str, str], float]:
             "GROUP BY label, dimension",
             tuple(panel_labels),
         ).fetchall()
+        local_seen: set[tuple[str, str]] = set()
         for r in rows:
+            ld = (r["label"], r["dimension"])
+            local_seen.add(ld)
             n = int(r["n"] or 0)
-            if n < _MIN_SAMPLE:
-                continue  # 小样本：不进 out，调用方 .get(key,1.0) 兜底 1.0
             score = float(r["score"] or 0.0)
-            out[(r["label"], r["dimension"])] = round((score + _ALPHA) / (n + _ALPHA + _BETA), 3)
+            if prior and ld in prior:
+                # 分支1：共轭后验（先验锚定，小样本也合理估计）
+                a, b = prior[ld]
+                out[ld] = round((a + score) / (a + b + n), 3)
+            elif n >= _MIN_SAMPLE:
+                # 分支2：Beta(2,2) 拉普拉斯（v2.1 现状）
+                out[ld] = round((score + _ALPHA) / (n + _ALPHA + _BETA), 3)
+            # 分支3：有本地 + 无先验 + n<5 → 不进 out（.get 兜底 1.0）
+        # 分支4：冷启动 warm-start（无本地 + 有先验 → 先验均值）
+        if prior:
+            panel_set = set(panel_labels)
+            for ld, (a, b) in prior.items():
+                if ld[0] in panel_set and ld not in local_seen:
+                    out[ld] = round(a / (a + b), 3)
     except Exception as e:  # noqa: BLE001
         logger.warning("reviews_db model_reliability 失败（降级全 1.0 不加权）: %s", e)
         return {}

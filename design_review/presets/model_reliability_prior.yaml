@@ -1,0 +1,22 @@
+# 模型可信度先验（warm-start）—— v2.2 机制占位，不含主观数值。
+#
+# 这是「官方 builtin 先验」的占位：今天 priors 为空 = 等同 v2.1（冷启动全 1.0 不加权）。
+# 等阶段2 probe-task calibration 跑出有依据的数据后，生成 official-prior-v1.yaml 替换此文件，
+# 所有用 mode: builtin 的用户自动生效（config 不用改）。
+#
+# 不想等官方、想立即用自己的先验？在 design_review_config.json 配：
+#   "model_reliability_prior": {"mode": "custom", "custom": {
+#     "gpt-4o": {"planner": {"r": 0.55, "kappa": 10}}
+#   }}
+# - r     = 可靠性 0~1（参考 JudgeBench per-domain + 你的经验；本地 feedback 会收敛覆盖它）
+# - kappa = 先验强度伪计数（10~20；越大冷启动锚越强，本地需更多样本才主导）
+# 内部 α=r·κ β=(1-r)·κ，与本地 feedback Beta 共轭：reliability = (α+score)/(α+β+n)
+
+priors: {}
+# example（不启用，仅示意格式）：
+# priors:
+#   gpt-4o:
+#     planner: {r: 0.55, kappa: 10}
+#     safety:  {r: 0.50, kappa: 10}
+#   claude-opus-4-8:
+#     planner: {r: 0.70, kappa: 12}

@@ -252,6 +252,33 @@ mark_finding(finding_id="claude-1", decision="accepted", params_hash="abc123…"
 
 v2 路线图原含 DebateStage（多轮辩论）+ Judge。联网调研（2024-2026 顶会论文：Talk Isn't Always Cheap / If MAD is the Answer / Debate or Vote NeurIPS 2025 / Should We Be Going MAD ICML 2024）否决多轮辩论用于审查任务：MMLU 掉 9-12 分，sycophancy/过早收敛/弱模型腐蚀强模型；**投票/共识才是有效部分**（工具现有的 consensus/majority/individual）。故 v2 改做飞轮，不做辩论。
 
+## 模型可信度先验（v2.2 warm-start）
+
+v2 reliability 飞轮冷启动期（新用户/新项目无 feedback）全 1.0 不加权。v2.2 加**先验 warm-start**：框架支持加载先验表，冷启动就有合理初值，本地 feedback 累积后 Beta 共轭收敛到本地偏好。
+
+**机制**（Beta-Binomial 共轭，Raykar 2010 / Efron-Morris 1973）：`reliability = (α+score)/(α+β+n)`。先验 `α=r·κ, β=(1-r)·κ`，与本地 feedback 共轭——`n=0`→先验均值，`n→∞`→本地真相。当前拉普拉斯 `(score+2)/(n+4)` 就是 `Beta(2,2)` 特例，加先验是纯增量，无先验时逐字节同 v2.1。
+
+**`design_review_config.json` 配 mode 三态**：
+```jsonc
+{
+  "model_reliability_prior": {
+    "mode": "builtin",   // none(禁用) | builtin(官方 preset，默认) | custom(用户自填)
+    "custom": {}         // mode=custom 时 {label:{dim:{r,kappa}}}，在 builtin 基础上覆盖
+  }
+}
+```
+- **`builtin`（默认）**：读 `presets/model_reliability_prior.yaml`。**今天为空 = 等同 v2.1**（零 breaking、无数值）；等阶段2 probe-task calibration 跑出 `official-prior-v1.yaml` 替换后，**所有用户配置不改自动生效**。
+- **`custom`**：builtin + 用户 `custom` 覆盖。想立即用自己的经验先验（不用等官方）：
+  ```jsonc
+  "model_reliability_prior": {"mode": "custom", "custom": {
+    "gpt-4o": {"planner": {"r": 0.55, "kappa": 10}}
+  }}
+  ```
+  `r`=可靠性 0~1（参考 [JudgeBench](https://arxiv.org/abs/2410.12784) per-domain + 你的经验；本地 feedback 会收敛覆盖它），`kappa`=先验强度伪计数（10~20，越大冷启动锚越强）。
+- **`none`**：完全禁用。
+
+**为什么 v2.2 不自带数值**：placeholder 主观数据会过期（GPT-5→5.2→6）且易成"伪权威"。机制做完整，等阶段2 probe-task calibration（golden set + CI 跑模型算 per-(model,dim) accuracy）生成有依据的 official 先验。在那之前，`custom` 让你/团队即时用自己的经验。
+
 ## 开发
 
 ```bash

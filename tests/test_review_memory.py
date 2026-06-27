@@ -367,3 +367,60 @@ def test_mark_finding_consecutive_marks_no_break(isolated_db):
     assert r0["ok"] is True and r1["ok"] is True
     assert r1["label"] == "gpt-4o" and r1["dimension"] == "planner"
     assert reviews_db.lookup("h1") is None  # stale，下次重算才命中
+
+
+# ===== v2.2 model_reliability 4 分支（共轭后验 + warm-start）=====
+
+def test_model_reliability_branch1_conjugated_posterior(isolated_db):
+    """分支1：有本地 + 有先验 → Beta 共轭后验 (α+score)/(α+β+n)。"""
+    for i in range(5):
+        reviews_db.record_feedback(finding_id=f"gpt-4o-{i}", params_hash="h", label="gpt-4o",
+                                   dimension="planner", decision="rejected")  # score=0, n=5
+    prior = {("gpt-4o", "planner"): (5.5, 4.5)}  # r=0.55 κ=10
+    rel = reviews_db.model_reliability(["gpt-4o"], prior=prior)
+    assert rel[("gpt-4o", "planner")] == round(5.5 / 15, 3)  # (5.5+0)/(5.5+4.5+5)=0.367
+
+
+def test_model_reliability_branch2_laplace_no_prior(isolated_db):
+    """分支2：有本地 + 无先验 + n≥5 → Beta(2,2) 拉普拉斯（v2.1 现状）。"""
+    for i in range(5):
+        reviews_db.record_feedback(finding_id=f"gpt-4o-{i}", params_hash="h", label="gpt-4o",
+                                   dimension="planner", decision="accepted")  # score=5, n=5
+    rel = reviews_db.model_reliability(["gpt-4o"], prior=None)
+    assert rel[("gpt-4o", "planner")] == round(7 / 9, 3)  # (5+2)/(5+4)
+
+
+def test_model_reliability_branch3_small_sample_no_prior_skipped(isolated_db):
+    """分支3：有本地 + 无先验 + n<5 → 不进 out（.get 兜底 1.0，向后兼容）。"""
+    for i in range(4):
+        reviews_db.record_feedback(finding_id=f"gpt-4o-{i}", params_hash="h", label="gpt-4o",
+                                   dimension="planner", decision="accepted")
+    assert reviews_db.model_reliability(["gpt-4o"], prior=None) == {}
+
+
+def test_model_reliability_branch4_cold_start_prior_mean(isolated_db):
+    """分支4：无本地 + 有先验 → 先验均值 α/(α+β)（冷启动 warm-start）。"""
+    prior = {("gpt-4o", "planner"): (5.5, 4.5)}  # 先验均值 0.55
+    rel = reviews_db.model_reliability(["gpt-4o"], prior=prior)
+    assert rel[("gpt-4o", "planner")] == round(5.5 / 10, 3)  # 0.55
+
+
+def test_model_reliability_prior_none_backward_compat(isolated_db):
+    """prior=None 逐字节同 v2.1（向后兼容：旧调用 model_reliability(labels) 不变）。"""
+    for i in range(5):
+        reviews_db.record_feedback(finding_id=f"gpt-4o-{i}", params_hash="h", label="gpt-4o",
+                                   dimension="planner", decision="accepted")
+    without_kw = reviews_db.model_reliability(["gpt-4o"])
+    with_none = reviews_db.model_reliability(["gpt-4o"], prior=None)
+    assert without_kw == with_none
+
+
+def test_model_reliability_conjugate_converges_to_local(isolated_db):
+    """共轭：n 增大 → 趋向本地真相 score/n（先验被本地覆盖）。"""
+    prior = {("gpt-4o", "planner"): (5.5, 4.5)}  # 先验均值 0.55
+    for i in range(20):
+        reviews_db.record_feedback(finding_id=f"gpt-4o-{i}", params_hash="h", label="gpt-4o",
+                                   dimension="planner", decision="accepted")  # 本地 1.0
+    rel = reviews_db.model_reliability(["gpt-4o"], prior=prior)
+    assert rel[("gpt-4o", "planner")] == round(25.5 / 30, 3)  # (5.5+20)/30=0.85
+    assert rel[("gpt-4o", "planner")] > 0.55  # 本地 accepted 主导，比先验高
