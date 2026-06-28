@@ -348,9 +348,9 @@ async def review_document(
     adapter: str = "auto",
     panel: list[str] | None = None,
     dimensions: list[str] | None = None,
-    retrieve_top_k: int = 5,
+    retrieve_top_k: int | None = None,
     extra_context: str = "",
-    output_format: str = "json",
+    output_format: str | None = None,
     timeout: float | None = None,
     effort: str | None = None,
     max_cost_usd: float | None = None,
@@ -401,13 +401,14 @@ async def review_document(
         retrieved_cases_ids=retrieved_ids, extra_context=extra_context,
     )
     cached = reviews_db.lookup(phash)
+    effective_output_format = dd["output_format"]
     if cached is not None:
         result = dict(cached["report"])
         result["cache_hit"] = True
         result["reuse_count"] = cached["reuse_count"]
         result["params_hash"] = phash  # v2 mark_finding 引用
-        if output_format != "json":
-            result["rendered"] = output.render(_rebuild_report(cached["report"]), output_format)
+        if effective_output_format != "json":
+            result["rendered"] = output.render(_rebuild_report(cached["report"]), effective_output_format)
         return result
 
     engine = _build_engine(ad, dd)
@@ -435,8 +436,8 @@ async def review_document(
     result = dict(report_dict)
     result["cache_hit"] = False
     result["params_hash"] = phash  # v2 mark_finding 引用
-    if output_format != "json":
-        result["rendered"] = output.render(report, output_format)
+    if effective_output_format != "json":
+        result["rendered"] = output.render(report, effective_output_format)
     return result
 
 
@@ -446,9 +447,9 @@ async def review_plan(
     adapter: str = "auto",
     panel: list[str] | None = None,
     dimensions: list[str] | None = None,
-    retrieve_top_k: int = 5,
+    retrieve_top_k: int | None = None,
     extra_context: str = "",
-    output_format: str = "json",
+    output_format: str | None = None,
     effort: str | None = None,
     max_cost_usd: float | None = None,
 ) -> dict:
@@ -467,9 +468,9 @@ async def review_code(
     adapter: str = "auto",
     panel: list[str] | None = None,
     dimensions: list[str] | None = None,
-    retrieve_top_k: int = 5,
+    retrieve_top_k: int | None = None,
     extra_context: str = "",
-    output_format: str = "json",
+    output_format: str | None = None,
     effort: str | None = None,
     max_cost_usd: float | None = None,
 ) -> dict:

@@ -1,7 +1,17 @@
-"""三层默认（builtin < config.json < env），仿 asset-generator-mcp defaults。
+"""Layered defaults for design-review.
 
-env 变量名：DESIGN_REVIEW_DEFAULT_<KEY>，如 DESIGN_REVIEW_DEFAULT_PANEL。
-config 文件：UNITY_PROJECT_ROOT/Assets/Generated/AIGenerated/design_review_config.json。
+Precedence:
+    builtin < global config < project config < env < explicit overrides
+
+Environment value overrides use ``DESIGN_REVIEW_DEFAULT_<KEY>``, for example
+``DESIGN_REVIEW_DEFAULT_PANEL``.
+
+Global config is loaded from ``DESIGN_REVIEW_CONFIG`` when set; otherwise from
+``$CODEX_HOME/design_review_config.json``, ``~/.codex/design_review_config.json``,
+or ``~/.config/design-review/config.json``.
+
+Project config stays at
+``$UNITY_PROJECT_ROOT/Assets/Generated/AIGenerated/design_review_config.json``.
 """
 from __future__ import annotations
 
@@ -9,14 +19,14 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("design_review.defaults")
 
 _ENV_PREFIX = "DESIGN_REVIEW_DEFAULT_"
 _BUILTINS = {
-    # 豆包需用户填 Ark endpoint id 后追加（如 volcengine/ep-...）
     "panel": ["claude-opus-4-8", "gpt-5"],
-    "dimensions": [],  # 空 = 自动（core 核心 planner/safety + adapter 全部）
+    "dimensions": [],
     "temperature": 0.3,
     "max_tokens": 4096,
     "consensus_threshold": 2,
@@ -24,37 +34,80 @@ _BUILTINS = {
     "timeout": 90,
     "normalizer_model": "claude-opus-4-8",
     "output_format": "json",
-    # v1.5 成本/思考强度控制（None=不启用：无成本上限 / 各模型用默认 effort）
     "effort": None,
     "max_cost_usd": None,
-    # v1.6 中转站/自定义 endpoint：{id: {provider: openai|anthropic, base_url, api_key_env|api_key, headers?, timeout?}}
     "endpoints": {},
-    # v1.7 隐私/脱敏策略（{policy: off|strict, trusted:{endpoint,model,label}, min_coverage}）。None/off=不脱敏
     "privacy_policy": None,
-    # v1.8 发散/可行性维度：per-dimension 上下文压缩策略 + 压缩下限
     "context_modes": {},
     "min_compressed_chars": 50,
-    # v2.2 模型可信度先验（warm-start）：{mode: none|builtin|custom, custom: {...}}。
-    # mode=builtin 默认（读 presets/model_reliability_prior.yaml，今天空=v2.1，official 填入自动生效）；
-    # custom 在 builtin 基础上覆盖（{label:{dim:{r,kappa}}}）；none 完全禁用。详见 prior.py。
     "model_reliability_prior": {"mode": "builtin", "custom": {}},
 }
 
 
-def _config_path() -> Path:
+def _project_config_path() -> Path:
     root = os.environ.get("UNITY_PROJECT_ROOT", ".")
     return Path(root) / "Assets" / "Generated" / "AIGenerated" / "design_review_config.json"
 
 
-def _load_config() -> dict:
-    p = _config_path()
+def _global_config_paths() -> list[Path]:
+    explicit = os.environ.get("DESIGN_REVIEW_CONFIG")
+    if explicit:
+        return [Path(explicit)]
+
+    paths: list[Path] = []
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        paths.append(Path(codex_home) / "design_review_config.json")
+    paths.append(Path.home() / ".codex" / "design_review_config.json")
+
+    xdg_config = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config:
+        paths.append(Path(xdg_config) / "design-review" / "config.json")
+    else:
+        paths.append(Path.home() / ".config" / "design-review" / "config.json")
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(path)
+    return deduped
+
+
+def _load_json_config(path: Path) -> dict[str, Any]:
+    p = path.expanduser()
     if not p.exists():
         return {}
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Ignoring invalid design review config %s: %s", p, exc)
         return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _merge_value(base: Any, override: Any) -> Any:
+    if isinstance(base, dict) and isinstance(override, dict):
+        merged = dict(base)
+        for key, value in override.items():
+            merged[key] = _merge_value(merged.get(key), value)
+        return merged
+    return override
+
+
+def _apply_config_layer(result: dict[str, dict[str, Any]], cfg: dict[str, Any], source: str, path: Path | None) -> None:
+    for key, value in cfg.items():
+        if key not in _BUILTINS:
+            continue
+        old_value = result[key]["value"]
+        result[key] = {
+            "value": _merge_value(old_value, value),
+            "source": source,
+        }
+        if path is not None:
+            result[key]["path"] = str(path.expanduser())
 
 
 def _coerce(key: str, val: str):
@@ -72,23 +125,26 @@ def _coerce(key: str, val: str):
 
 
 def get_all() -> dict:
-    """返回 {key: {value, source}}，source ∈ builtin|config|env。"""
-    result = {k: {"value": v, "source": "builtin"} for k, v in _BUILTINS.items()}
-    cfg = _load_config()
-    for k, v in cfg.items():
-        if k in _BUILTINS:
-            result[k] = {"value": v, "source": "config"}
-    for k in _BUILTINS:
-        ev = os.environ.get(f"{_ENV_PREFIX}{k.upper()}")
+    """Return ``{key: {value, source}}`` with layered config provenance."""
+    result = {key: {"value": value, "source": "builtin"} for key, value in _BUILTINS.items()}
+
+    for path in _global_config_paths():
+        _apply_config_layer(result, _load_json_config(path), "global_config", path)
+
+    project_path = _project_config_path()
+    _apply_config_layer(result, _load_json_config(project_path), "project_config", project_path)
+
+    for key in _BUILTINS:
+        ev = os.environ.get(f"{_ENV_PREFIX}{key.upper()}")
         if ev is not None:
-            result[k] = {"value": _coerce(k, ev), "source": "env"}
+            result[key] = {"value": _coerce(key, ev), "source": "env"}
     return result
 
 
 def apply(**overrides) -> dict:
-    """合并：builtin < config < env < 显式 override（非 None 才覆盖）。"""
-    merged = {k: v["value"] for k, v in get_all().items()}
-    for k, v in overrides.items():
-        if v is not None and k in merged:
-            merged[k] = v
+    """Merge builtin < global config < project config < env < explicit overrides."""
+    merged = {key: value["value"] for key, value in get_all().items()}
+    for key, value in overrides.items():
+        if value is not None and key in merged:
+            merged[key] = value
     return merged
