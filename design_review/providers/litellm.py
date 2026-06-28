@@ -108,7 +108,13 @@ class LiteLLMBackend:
         # litellm drop_params 兜不住，按模型名显式跳过采样参数。
         short = litellm_model.split("/")[-1]
         is_reasoning = bool(re.match(r"(?:o[1-9]|gpt-5)", short))
-        sampling = {} if is_reasoning else {"temperature": temperature, "top_p": top_p}
+        is_anthropic = litellm_model.startswith("anthropic/") or "claude" in short
+        if is_reasoning:
+            sampling = {}
+        elif is_anthropic:
+            sampling = {"temperature": 1 if effort else temperature}
+        else:
+            sampling = {"temperature": temperature, "top_p": top_p}
 
         try:
             resp = await litellm.acompletion(

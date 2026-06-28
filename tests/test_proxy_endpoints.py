@@ -231,6 +231,27 @@ def test_backend_anthropic_prefix(monkeypatch):
     assert kw["api_base"] == "https://open.bigmodel.cn/api/anthropic"
 
 
+def test_backend_anthropic_sampling_omits_top_p(monkeypatch):
+    cap = _patch_litellm(monkeypatch)
+    reg = {"r": {"provider": "anthropic", "base_url": "https://x", "api_key": "k", "headers": {}, "timeout": None}}
+    backend = LiteLLMBackend(endpoint_registry=reg)
+    asyncio.run(backend.complete(model="claude-haiku-4-5", system="s", user="u", endpoint_id="r"))
+    kw = cap.calls[0]
+    assert kw["temperature"] == 0.3
+    assert "top_p" not in kw
+
+
+def test_backend_anthropic_effort_uses_temperature_one(monkeypatch):
+    cap = _patch_litellm(monkeypatch)
+    reg = {"r": {"provider": "anthropic", "base_url": "https://x", "api_key": "k", "headers": {}, "timeout": None}}
+    backend = LiteLLMBackend(endpoint_registry=reg)
+    asyncio.run(backend.complete(model="claude-haiku-4-5", system="s", user="u", endpoint_id="r", effort="low"))
+    kw = cap.calls[0]
+    assert kw["temperature"] == 1
+    assert "top_p" not in kw
+    assert kw["thinking"] == {"type": "adaptive"}
+
+
 def test_backend_prefix_guard(monkeypatch):
     """model 已含 / 则不再拼前缀，防 openai/openai/。"""
     cap = _patch_litellm(monkeypatch)

@@ -1,5 +1,7 @@
 # Design Review Config Precedence
 
+[English](config_precedence.md) | [简体中文](config_precedence.zh-CN.md)
+
 Defaults are layered as:
 
 ```text

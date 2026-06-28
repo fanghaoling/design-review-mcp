@@ -1,5 +1,7 @@
 # Endpoint Configuration
 
+[English](endpoint_config.md) | [简体中文](endpoint_config.zh-CN.md)
+
 `design-review-mcp` supports official LiteLLM model strings and custom gateway endpoints.
 
 Use one endpoint per wire protocol. If the same gateway exposes both OpenAI-compatible and Anthropic-compatible APIs,
