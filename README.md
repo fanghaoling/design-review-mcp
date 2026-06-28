@@ -6,8 +6,9 @@
 document to multiple LLM reviewer roles, retrieves project-specific knowledge, normalizes duplicate findings, and returns
 consensus-oriented reports that are easier to act on.
 
-The core pipeline is project-agnostic. Project-specific behavior lives in adapters; the current package includes
-`generic` and `unity` adapters, with Unity ECS/NetCode/Burst as the first deep integration target.
+The core pipeline is project-agnostic. Project-specific behavior lives in adapters, so the default experience stays
+useful for general product, architecture, code, and document design reviews. Optional adapters can add domain knowledge
+without changing the core pipeline.
 
 ## Highlights
 
@@ -28,7 +29,7 @@ Most pieces are swappable. Adapter-specific behavior stays out of `core/`.
 |---|---|---|
 | `ModelBackend` | `async complete(...)` | `LiteLLMBackend` |
 | `KnowledgeProvider` | `retrieve/list_cases/add_case` | `YamlKnowledgeProvider` |
-| `ProjectAdapter` | `read_context/version/convention + reviewers/knowledge` | `UnityAdapter` / `GenericAdapter` |
+| `ProjectAdapter` | `read_context/version/convention + reviewers/knowledge` | `GenericAdapter`, optional domain adapters |
 | `ReportRenderer` | `render(ReviewReport)` | Markdown / JSON / SARIF renderers |
 | `Stage` | `process(ctx) -> ctx` | retrieve, context, prompt, review, parse, normalize, consensus, score |
 
@@ -59,9 +60,8 @@ The pipeline is designed to reduce "confident but unsupported" feedback:
 
 ## Knowledge Base
 
-Review quality depends heavily on project knowledge. The package includes general Unity ECS/Burst/FlowField/NetCode
-seed cases under `design_review/adapters/unity/knowledge/`, but your project-specific architecture decisions and past
-bugs should live in project-local knowledge files.
+Review quality depends heavily on project knowledge. Built-in adapter packages may ship seed cases, but the most useful
+architecture decisions, historical bugs, and team conventions usually live in project-local knowledge files.
 
 Recommended project-local location:
 
@@ -72,14 +72,14 @@ Recommended project-local location:
 Example:
 
 ```yaml
-- id: MYSYSTEM-001
-  title: "Avoid structural changes inside hot ECS loops"
-  version: {entities: ">=1.4,<2.0"}
-  triggers: ["EntityCommandBuffer", "structural change", "hot loop"]
-  category: ecs_perf
-  bad_pattern: "Directly create or destroy entities inside a frequently running system update."
-  recommended_pattern: "Record changes into an ECB and play them back at a safe sync point."
-  source: "MEMORY.md#ecs-structural-changes"
+- id: API-001
+  title: "Keep breaking API changes behind a migration path"
+  version: {service: ">=2.0"}
+  triggers: ["breaking change", "API contract", "migration"]
+  category: compatibility
+  bad_pattern: "Change a public request or response shape without a versioned fallback or migration notes."
+  recommended_pattern: "Add a compatible path, document the migration window, and test old and new clients."
+  source: "ADR-014#api-versioning"
 ```
 
 Tips:
@@ -118,12 +118,13 @@ Register the stdio server in Codex, Claude Code, or another MCP client:
     "design-review-mcp"
   ],
   "env": {
-    "UNITY_PROJECT_ROOT": "<path-to-unity-project>",
+    "UNITY_PROJECT_ROOT": "<path-to-project-root>",
     "DESIGN_REVIEW_CONFIG": "<path-to-design-review-mcp>/design_review_config.json"
   }
 }
 ```
 
+`UNITY_PROJECT_ROOT` is a historical project-root environment variable name. Point it at the project you want reviewed.
 Keep API keys in `.env` or process environment variables. Do not commit `.env` or local `design_review_config.json`.
 
 ## CLI
@@ -142,7 +143,7 @@ Common options:
 
 - `--panel`: model list or endpoint shortcuts.
 - `--dimensions`: reviewer dimensions.
-- `--adapter`: `auto`, `generic`, or `unity`.
+- `--adapter`: `auto`, `generic`, or another installed domain adapter.
 - `--retrieve-top-k`: number of knowledge cases to retrieve.
 - `--effort`: reasoning/thinking effort where supported.
 - `--max-cost-usd`: preflight budget cap.
@@ -269,7 +270,7 @@ design_review/
   server.py              # MCP server entry point
   cli.py                 # design-review CLI
   core/                  # pipeline, stages, schemas, report models
-  adapters/              # generic and Unity adapters
+  adapters/              # generic and optional domain adapters
   providers/             # LLM backends
   knowledge/             # retrieval providers
   privacy/               # privacy policies
@@ -282,7 +283,7 @@ docs/                    # focused docs
 
 - Do not commit `.env`, `.env.local`, API keys, generated databases, or local `design_review_config.json` files.
 - Prefer `api_key_env` over plaintext `api_key`.
-- `Assets/Generated/AIGenerated/design_reviews.db` is generated local data and should not be used in tests.
+- Generated review databases such as `design_reviews.db` are local data and should not be used in tests.
 
 ## License
 

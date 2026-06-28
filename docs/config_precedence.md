@@ -28,12 +28,13 @@ $CODEX_HOME/design_review_config.json
 ~/.config/design-review/config.json
 ```
 
-Project config remains:
+Project-local config is still supported through the historical project-root environment variable:
 
 ```text
 $UNITY_PROJECT_ROOT/Assets/Generated/AIGenerated/design_review_config.json
 ```
 
+For general projects, point `UNITY_PROJECT_ROOT` at the project root you want reviewed.
 Project config overrides global config. Dict values merge recursively, so project config can add one local endpoint,
 one `context_modes` entry, or one `model_reliability_prior.custom` entry without duplicating the whole global file.
 Lists and scalar values replace the lower layer.

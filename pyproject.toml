@@ -1,7 +1,7 @@
 [project]
 name = "design-review-mcp"
 version = "0.1.0"
-description = "AI Design Review Framework：多模型对抗设计审查 MCP，项目知识库 RAG + canonical 归一 + 校准共识。Unity ECS 为首个参考 adapter。"
+description = "AI Design Review Framework：多模型对抗设计审查 MCP，项目知识库 RAG + canonical 归一 + 校准共识。"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

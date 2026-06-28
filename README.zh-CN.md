@@ -4,7 +4,7 @@
 
 `design-review-mcp` 是一个用于对抗式设计审查的 MCP server 和 CLI。它会把方案、代码变更或文档分发给多个 LLM reviewer，结合项目知识库检索、finding 归一化和共识汇总，生成更容易落地处理的审查报告。
 
-核心 pipeline 保持项目无关，项目特定行为放在 adapter 中。当前内置 `generic` 和 `unity` adapter，Unity ECS/NetCode/Burst 是第一个重点适配方向。
+核心 pipeline 保持项目无关，项目特定行为放在 adapter 中，因此默认形态适合通用的产品、架构、代码和文档设计审查。可选 adapter 可以在不改变 core pipeline 的前提下注入领域知识。
 
 ## 功能概览
 
@@ -25,7 +25,7 @@
 |---|---|---|
 | `ModelBackend` | `async complete(...)` | `LiteLLMBackend` |
 | `KnowledgeProvider` | `retrieve/list_cases/add_case` | `YamlKnowledgeProvider` |
-| `ProjectAdapter` | `read_context/version/convention + reviewers/knowledge` | `UnityAdapter` / `GenericAdapter` |
+| `ProjectAdapter` | `read_context/version/convention + reviewers/knowledge` | `GenericAdapter`、可选领域 adapter |
 | `ReportRenderer` | `render(ReviewReport)` | Markdown / JSON / SARIF renderer |
 | `Stage` | `process(ctx) -> ctx` | retrieve、context、prompt、review、parse、normalize、consensus、score |
 
@@ -56,7 +56,7 @@ pipeline 用来降低“模型很自信但没有证据”的反馈：
 
 ## 知识库
 
-审查质量很依赖项目知识。框架随包带了一些 Unity ECS/Burst/FlowField/NetCode 通用种子案例，位置在 `design_review/adapters/unity/knowledge/`。但你项目自己的架构决策、历史 bug 和约定，建议放到项目本地知识库。
+审查质量很依赖项目知识。内置 adapter 包可以带一些种子案例，但最有价值的架构决策、历史 bug 和团队约定，通常还是应该放在项目本地知识库里。
 
 推荐位置：
 
@@ -67,14 +67,14 @@ pipeline 用来降低“模型很自信但没有证据”的反馈：
 示例：
 
 ```yaml
-- id: MYSYSTEM-001
-  title: "Avoid structural changes inside hot ECS loops"
-  version: {entities: ">=1.4,<2.0"}
-  triggers: ["EntityCommandBuffer", "structural change", "hot loop"]
-  category: ecs_perf
-  bad_pattern: "Directly create or destroy entities inside a frequently running system update."
-  recommended_pattern: "Record changes into an ECB and play them back at a safe sync point."
-  source: "MEMORY.md#ecs-structural-changes"
+- id: API-001
+  title: "Keep breaking API changes behind a migration path"
+  version: {service: ">=2.0"}
+  triggers: ["breaking change", "API contract", "migration"]
+  category: compatibility
+  bad_pattern: "Change a public request or response shape without a versioned fallback or migration notes."
+  recommended_pattern: "Add a compatible path, document the migration window, and test old and new clients."
+  source: "ADR-014#api-versioning"
 ```
 
 建议：
@@ -113,12 +113,13 @@ uv run --extra dev ruff check .
     "design-review-mcp"
   ],
   "env": {
-    "UNITY_PROJECT_ROOT": "<path-to-unity-project>",
+    "UNITY_PROJECT_ROOT": "<path-to-project-root>",
     "DESIGN_REVIEW_CONFIG": "<path-to-design-review-mcp>/design_review_config.json"
   }
 }
 ```
 
+`UNITY_PROJECT_ROOT` 是为了兼容保留的项目根目录变量名，把它指向要审查的项目根目录即可。
 API key 建议放在 `.env` 或进程环境变量里。不要提交 `.env` 或本地 `design_review_config.json`。
 
 ## CLI
@@ -137,7 +138,7 @@ uv run design-review doc docs/rfc.md --type rfc --output markdown
 
 - `--panel`：模型列表或 endpoint 快捷写法。
 - `--dimensions`：审查维度。
-- `--adapter`：`auto`、`generic` 或 `unity`。
+- `--adapter`：`auto`、`generic` 或已安装的领域 adapter。
 - `--retrieve-top-k`：检索知识库案例数量。
 - `--effort`：支持时传入 reasoning/thinking 强度。
 - `--max-cost-usd`：预估成本上限。
@@ -260,7 +261,7 @@ design_review/
   server.py              # MCP server 入口
   cli.py                 # design-review CLI
   core/                  # pipeline、stage、schema、report model
-  adapters/              # generic / Unity adapter
+  adapters/              # generic / 可选领域 adapter
   providers/             # LLM backend
   knowledge/             # 检索实现
   privacy/               # 隐私策略
@@ -273,7 +274,7 @@ docs/                    # 聚焦文档
 
 - 不要提交 `.env`、`.env.local`、API key、生成数据库或本地 `design_review_config.json`。
 - 配置中优先使用 `api_key_env`，避免明文 `api_key`。
-- `Assets/Generated/AIGenerated/design_reviews.db` 是本地生成数据，测试不应依赖它。
+- `design_reviews.db` 等生成的 review 数据库属于本地数据，测试不应依赖它。
 
 ## License
 
