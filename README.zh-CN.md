@@ -54,6 +54,47 @@ pipeline 用来降低“模型很自信但没有证据”的反馈：
 - canonical normalize 减少不同模型之间的同义重复。
 - calibrated confidence 会结合模型共识、严重性、知识库命中和 Review Memory。
 
+## 外援会诊 Consult
+
+`consult_problem` 用于主模型卡住、没有把握、连续调试失败或需要第三方视角时，请外部专家模型给出结构化建议。它不执行命令、不修改文件，只返回可追踪的诊断和下一步实验。
+
+```python
+consult_problem(
+    problem="FlowField 更新偶发死锁",
+    context="Unity ECS 项目，已尝试双 Buffer 和 JobHandle.CombineDependencies。",
+    logs="偶发卡在 CompleteDependency() 附近",
+    attempts=[
+        "改成双 Buffer",
+        "合并 JobHandle 依赖",
+    ],
+    question="还有哪些 ECS 架构层面的排查方向？",
+    mode="architecture",
+)
+```
+
+常用 `mode`：
+
+- `debugging`：调试与根因定位。
+- `architecture`：架构边界、状态流和长期维护。
+- `performance`：性能、延迟、token/API 成本。
+- `simplicity`：YAGNI、简化和更小 MVP。
+- `game_design`：玩法和玩家体验。
+- `challenge`：反方挑战当前想法。
+- `planning`：任务拆解、风险和验收标准。
+
+配置建议：
+
+```jsonc
+{
+  "consult_panel": ["modelbridge_openai/gpt-5.4-mini"],
+  "consult_consultants": ["debugger", "critic"],
+  "consult_max_cost_usd": 0.03,
+  "consult_max_input_chars": 24000
+}
+```
+
+如果没有配置 `consult_panel`，会诊会回退到 `panel`。生产使用建议单独配置较便宜、响应快的 `consult_panel`，避免一次会诊展开完整审查面板。
+
 ## 知识库
 
 审查质量很依赖项目知识。内置 adapter 包可以带一些种子案例，但最有价值的架构决策、历史 bug 和团队约定，通常还是应该放在项目本地知识库里。

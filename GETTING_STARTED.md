@@ -49,6 +49,30 @@ review_plan(plan_text="# 我的方案...", panel=["gpt-4o", "claude-opus-4-8"])
 
 结果看 `consensus`（全模型同意，优先处理）/ `majority`（2+ 模型）/ `individual`（单模型，谨慎）。
 
+## 5. 卡住时外援会诊
+
+当主模型没有把握、连续调试失败或需要另一个视角时，用 `consult_problem`：
+
+```python
+consult_problem(
+    problem="测试在新增 MCP tool 后偶发失败",
+    context="只需要外部模型给排查思路，不要修改文件。",
+    logs="AssertionError: expected consult_problem in tool list",
+    attempts=["重启 MCP server", "检查 FastMCP 注册表"],
+    mode="debugging",
+    panel=["modelbridge_openai/gpt-5.4-mini"],
+    max_cost_usd=0.02,
+)
+```
+
+常用 mode：
+
+- `debugging`：根因定位。
+- `architecture`：架构视角。
+- `challenge`：反方挑战。
+- `simplicity`：简化/YAGNI。
+- `planning`：任务拆解。
+
 ---
 
 ## 中转站 / 自定义 endpoint（OpenAI/Anthropic 兼容网关）

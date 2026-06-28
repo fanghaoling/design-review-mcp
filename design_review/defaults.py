@@ -41,6 +41,11 @@ _BUILTINS = {
     "context_modes": {},
     "min_compressed_chars": 50,
     "model_reliability_prior": {"mode": "builtin", "custom": {}},
+    "consult_panel": [],
+    "consult_consultants": ["debugger", "architect", "critic"],
+    "consult_mode": None,
+    "consult_max_input_chars": 24000,
+    "consult_max_cost_usd": None,
 }
 
 
@@ -111,12 +116,12 @@ def _apply_config_layer(result: dict[str, dict[str, Any]], cfg: dict[str, Any], 
 
 
 def _coerce(key: str, val: str):
-    if key in ("temperature", "timeout", "max_cost_usd"):
+    if key in ("temperature", "timeout", "max_cost_usd", "consult_max_cost_usd"):
         try:
             return float(val)
         except ValueError:
             return val
-    if key in ("max_tokens", "consensus_threshold", "retrieve_top_k", "min_compressed_chars"):
+    if key in ("max_tokens", "consensus_threshold", "retrieve_top_k", "min_compressed_chars", "consult_max_input_chars"):
         try:
             return int(val)
         except ValueError:

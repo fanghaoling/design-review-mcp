@@ -41,6 +41,8 @@ from . import defaults as _defaults_mod  # noqa: E402
 from . import output, prior as prior_mod, reviews_db  # noqa: E402
 from .adapters.generic import GenericAdapter  # noqa: E402
 from .adapters.unity import UnityAdapter  # noqa: E402
+from .core.consult import ConsultEngine, ConsultRequest  # noqa: E402
+from .core.consultants import CONSULTANTS_DIR, list_consultants as _list_consultant_files  # noqa: E402
 from .core.engine import ReviewEngine  # noqa: E402
 from .core.report import CanonicalFinding, Finding, ReviewReport  # noqa: E402
 from .core.reviewers.loader import list_reviewers as _list_reviewer_files  # noqa: E402
@@ -51,6 +53,16 @@ from .privacy import build_policy  # noqa: E402
 from .providers import LiteLLMBackend  # noqa: E402
 
 _ADAPTERS = {"unity": UnityAdapter, "generic": GenericAdapter}
+
+_CONSULT_MODE_CONSULTANTS = {
+    "debugging": ["debugger"],
+    "architecture": ["architect", "critic"],
+    "performance": ["performance", "critic"],
+    "simplicity": ["simplicity", "maintenance"],
+    "game_design": ["game_design", "critic"],
+    "challenge": ["challenge", "critic"],
+    "planning": ["architect", "test_designer", "critic"],
+}
 
 
 def _resolve_adapter(name: str, project_root: str):
@@ -220,6 +232,25 @@ def _build_engine(adapter, dd: dict) -> ReviewEngine:
         adapter=adapter, backend=backend, knowledge=knowledge,
         pipeline=pipeline, defaults=dd, policy=policy,
     )
+
+
+def _build_consult_engine(dd: dict) -> ConsultEngine:
+    registry = _resolve_endpoints(dd.get("endpoints") or {})
+    backend = LiteLLMBackend(timeout=float(dd.get("timeout", 90)), endpoint_registry=registry)
+    return ConsultEngine(backend=backend, consultants_dir=CONSULTANTS_DIR)
+
+
+def _resolve_consultants(consultants: list[str] | None, mode: str | None, defaults: dict) -> tuple[list[str], str | None]:
+    """Resolve consultant roles. Explicit consultants win; mode picks a preset."""
+    effective_mode = mode if mode is not None else defaults.get("consult_mode")
+    if consultants is not None:
+        return list(consultants), effective_mode
+    if effective_mode:
+        preset = _CONSULT_MODE_CONSULTANTS.get(effective_mode)
+        if preset is None:
+            raise ValueError(f"未知 consult mode: {effective_mode!r}，可用: {sorted(_CONSULT_MODE_CONSULTANTS)}")
+        return list(preset), effective_mode
+    return list(defaults.get("consult_consultants") or []), None
 
 
 def _rebuild_report(d: dict) -> ReviewReport:
@@ -484,6 +515,71 @@ async def review_code(
 
 
 @mcp.tool()
+async def consult_problem(
+    problem: str,
+    context: str = "",
+    files: dict[str, str] | None = None,
+    logs: str = "",
+    attempts: list[str] | None = None,
+    goal: str = "",
+    current_attempt: str = "",
+    why_stuck: str = "",
+    question: str = "",
+    desired_output: str = "",
+    constraints: list[str] | None = None,
+    panel: list[str] | None = None,
+    consultants: list[str] | None = None,
+    mode: str | None = None,
+    effort: str | None = None,
+    max_cost_usd: float | None = None,
+    max_input_chars: int | None = None,
+) -> dict:
+    """外援会诊：当主模型卡住、没把握、连续调试失败或需要第三方视角时调用。
+
+    该工具只返回结构化建议，不执行命令、不修改文件。mode 可选 debugging/architecture/
+    performance/simplicity/game_design/challenge/planning。发送给外部模型前会做基础敏感信息
+    脱敏、输入长度上限控制和 consultant 白名单校验。panel None 时优先使用 consult_panel，
+    未配置则回退 review panel；consultants None 时使用 consult_consultants。
+    """
+    dd = _defaults_mod.apply(effort=effort)
+    endpoint_ids = set((dd.get("endpoints") or {}).keys())
+    raw_panel = panel if panel is not None else (dd.get("consult_panel") or dd.get("panel") or [])
+    panel_used = _normalize_panel(raw_panel, endpoint_ids, dd.get("endpoints"))
+    consultants_used, mode_used = _resolve_consultants(consultants, mode, dd)
+    cost_limit = max_cost_usd if max_cost_usd is not None else dd.get("consult_max_cost_usd")
+    if cost_limit is None:
+        cost_limit = dd.get("max_cost_usd")
+    input_limit = int(max_input_chars if max_input_chars is not None else dd.get("consult_max_input_chars", 24000))
+
+    engine = _build_consult_engine(dd)
+    report = await engine.consult(
+        ConsultRequest(
+            problem=problem,
+            context=context,
+            files=files or {},
+            logs=logs,
+            attempts=attempts or [],
+            goal=goal,
+            current_attempt=current_attempt,
+            why_stuck=why_stuck,
+            question=question,
+            desired_output=desired_output,
+            constraints=constraints or [],
+        ),
+        panel=panel_used,
+        consultants=consultants_used,
+        max_input_chars=input_limit,
+        max_cost_usd=cost_limit,
+        effort=dd.get("effort"),
+    )
+    result = report.to_dict()
+    result["panel"] = [entry["label"] for entry in panel_used]
+    result["consultants"] = list(consultants_used)
+    result["mode"] = mode_used
+    return result
+
+
+@mcp.tool()
 def list_adapters() -> dict:
     """列出可用 ProjectAdapter + auto 检测结果。"""
     root = os.environ.get("UNITY_PROJECT_ROOT", ".")
@@ -505,6 +601,12 @@ def list_reviewers(adapter: str = "auto") -> dict:
     core = _list_reviewer_files(CORE_REVIEWERS_DIR)
     specific = _list_reviewer_files(ad.reviewers_dir()) if ad.reviewers_dir().exists() else []
     return {"adapter": ad.name, "core": core, "adapter_specific": specific}
+
+
+@mcp.tool()
+def list_consultants() -> dict:
+    """列出可用外援会诊角色。"""
+    return {"consultants": _list_consultant_files(CONSULTANTS_DIR)}
 
 
 @mcp.tool()

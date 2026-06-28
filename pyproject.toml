@@ -31,6 +31,7 @@ packages = ["design_review"]
 # generic adapter 无自己的 reviewers（回退 core 通用），故不含 generic/reviewers。
 [tool.hatch.build.targets.wheel.force-include]
 "design_review/core/reviewers" = "design_review/core/reviewers"
+"design_review/core/consultants" = "design_review/core/consultants"
 "design_review/core/schema" = "design_review/core/schema"
 "design_review/adapters/unity/reviewers" = "design_review/adapters/unity/reviewers"
 "design_review/adapters/unity/knowledge" = "design_review/adapters/unity/knowledge"

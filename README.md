@@ -58,6 +58,46 @@ The pipeline is designed to reduce "confident but unsupported" feedback:
 - Canonical normalization reduces duplicate phrasing across models.
 - Calibrated confidence combines model agreement, severity, retrieval hits, and review memory.
 
+## External Consultation
+
+`consult_problem` is for moments when the main assistant is stuck, uncertain, repeatedly debugging the same issue, or
+needs another expert perspective. It does not execute commands or edit files; it returns structured advice, hypotheses,
+next experiments, risks, and a recommended plan.
+
+```python
+consult_problem(
+    problem="FlowField updates occasionally deadlock",
+    context="Unity ECS project; double buffering and JobHandle.CombineDependencies were already tried.",
+    logs="Occasionally stalls near CompleteDependency()",
+    attempts=["double buffering", "combined JobHandle dependencies"],
+    mode="architecture",
+)
+```
+
+Common modes:
+
+- `debugging`: root-cause diagnosis.
+- `architecture`: boundaries, state flow, and maintainability.
+- `performance`: latency, throughput, token/API cost.
+- `simplicity`: YAGNI and smaller MVP slices.
+- `game_design`: gameplay and player experience.
+- `challenge`: adversarial challenge to the current thinking.
+- `planning`: task decomposition, risks, and acceptance criteria.
+
+Recommended config:
+
+```jsonc
+{
+  "consult_panel": ["modelbridge_openai/gpt-5.4-mini"],
+  "consult_consultants": ["debugger", "critic"],
+  "consult_max_cost_usd": 0.03,
+  "consult_max_input_chars": 24000
+}
+```
+
+If `consult_panel` is not configured, consultation falls back to `panel`. For day-to-day use, keep a cheaper/faster
+consult panel so one consultation does not expand the full review panel.
+
 ## Knowledge Base
 
 Review quality depends heavily on project knowledge. Built-in adapter packages may ship seed cases, but the most useful
