@@ -48,6 +48,22 @@ def test_yaml_provider_retrieve(tmp_path):
     assert kp.retrieve("完全无关的内容xyz", {}) == []
 
 
+def test_yaml_provider_anti_triggers_suppress_cross_domain(tmp_path):
+    # ISS-006：同词跨域误命中（game "dormant" 撞 brain-region "dormant"）靠 anti_triggers 降噪
+    f = tmp_path / "k.yaml"
+    f.write_text(
+        "- id: GP-DORMANT\n  title: enemy dormancy\n  triggers: [dormant]\n"
+        "  anti_triggers: [brain, cognitive, DMN]\n"
+        "  category: gameplay\n  bad_pattern: b\n  recommended_pattern: r\n",
+        encoding="utf-8",
+    )
+    kp = YamlKnowledgeProvider(tmp_path)
+    # 同词但跨域（brain-region 文本命中 anti_trigger "brain"）→ 不召回
+    assert kp.retrieve("dormant memory in the brain region", {}) == []
+    # 真正相关（无 anti 词）→ 召回
+    assert [c.id for c in kp.retrieve("enemy goes dormant", {})] == ["GP-DORMANT"]
+
+
 def test_yaml_provider_version_filter(tmp_path):
     f = tmp_path / "k.yaml"
     f.write_text(

@@ -5,6 +5,7 @@
       title: "..."
       version: {entities: ">=1.4,<1.5"}
       triggers: [Burst, BC1064, ISystem]
+      anti_triggers: [brain, memory]   # 可选：任一命中则不召回（跨域同词降噪，ISS-006）
       category: ecs_perf
       bad_pattern: "..."
       recommended_pattern: "..."
@@ -82,6 +83,7 @@ class YamlKnowledgeProvider:
                         id=item.get("id", ""),
                         title=item.get("title", ""),
                         triggers=[t for t in (item.get("triggers") or []) if isinstance(t, str)],
+                        anti_triggers=[t for t in (item.get("anti_triggers") or []) if isinstance(t, str)],
                         category=item.get("category", ""),
                         bad_pattern=item.get("bad_pattern", ""),
                         recommended_pattern=item.get("recommended_pattern", ""),
@@ -109,10 +111,17 @@ class YamlKnowledgeProvider:
     ) -> list[Case]:
         pv = project_version or {}
         candidates = [c for c in self._cases if version_matches(c.version, pv)]
+        low = (text or "").lower()
         hits = extract_keyword_hits(text, candidates)
         scored = [
             (c, len({t for t in c.triggers if t in hits})) for c in candidates
         ]
-        scored = [(c, s) for c, s in scored if s > 0]
+        # anti_triggers：任一负触发词命中 → 判定跨域同词误命中（如 game "dormant" 撞 brain "dormant"），不召回
+        scored = [
+            (c, s)
+            for c, s in scored
+            if s > 0
+            and not any(isinstance(t, str) and t and t.lower() in low for t in c.anti_triggers)
+        ]
         scored.sort(key=lambda x: (-x[1], x[0].id))
         return [c for c, _ in scored[:top_k]]

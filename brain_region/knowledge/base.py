@@ -20,6 +20,7 @@ class Case:
     id: str
     title: str
     triggers: list[str] = field(default_factory=list)
+    anti_triggers: list[str] = field(default_factory=list)  # 任一命中→不召回（跨域同词降噪，ISS-006）
     category: str = ""
     bad_pattern: str = ""
     recommended_pattern: str = ""
