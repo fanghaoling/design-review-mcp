@@ -22,13 +22,13 @@ async def main() -> None:
         print("ERROR: 未设 env:", missing)
         return
     os.environ["UNITY_PROJECT_ROOT"] = str(UNITY_PROJECT)  # 让 config/reviews_db 路径对
-    from brain_region import defaults as defaults_mod
-    from brain_region.adapters.unity import UnityAdapter
-    from brain_region.core import ReviewDocument
-    from brain_region.core.engine import ReviewEngine
-    from brain_region.core.stages import build_default_pipeline
-    from brain_region.knowledge import YamlKnowledgeProvider
-    from brain_region.providers import LiteLLMBackend
+    from brainregion import defaults as defaults_mod
+    from brainregion.adapters.unity import UnityAdapter
+    from brainregion.core import ReviewDocument
+    from brainregion.core.engine import ReviewEngine
+    from brainregion.core.stages import build_default_pipeline
+    from brainregion.knowledge import YamlKnowledgeProvider
+    from brainregion.providers import LiteLLMBackend
 
     dd = defaults_mod.apply()
     a = UnityAdapter(str(UNITY_PROJECT))

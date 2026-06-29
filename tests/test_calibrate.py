@@ -9,11 +9,11 @@ import asyncio
 import json
 from pathlib import Path
 
-from brain_region.eval import calibrate as cal
-from brain_region.eval import judge
-from brain_region.providers.base import ModelResponse
+from brainregion.eval import calibrate as cal
+from brainregion.eval import judge
+from brainregion.providers.base import ModelResponse
 
-_SEED = Path(__file__).resolve().parent.parent / "brain_region" / "eval" / "gold" / "review_calibration.yaml"
+_SEED = Path(__file__).resolve().parent.parent / "brainregion" / "eval" / "gold" / "review_calibration.yaml"
 
 
 # ---------- load_gold / _to_report ----------

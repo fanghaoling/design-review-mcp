@@ -12,7 +12,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-logger = logging.getLogger("brain_region.reviews_db")
+logger = logging.getLogger("brainregion.reviews_db")
 
 
 def _db_path() -> Path:

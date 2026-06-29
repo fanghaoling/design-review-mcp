@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("brain_region.defaults")
+logger = logging.getLogger("brainregion.defaults")
 
 _ENV_PREFIX = "BRAIN_REGION_DEFAULT_"
 _LEGACY_ENV_PREFIX = "DESIGN_REVIEW_DEFAULT_"

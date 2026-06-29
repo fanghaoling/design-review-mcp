@@ -13,9 +13,9 @@ import json
 
 import pytest
 
-from brain_region import reviews_db
-from brain_region.providers.litellm import LiteLLMBackend
-from brain_region.server import _describe_model_routes, _normalize_one, _normalize_panel, _resolve_endpoints
+from brainregion import reviews_db
+from brainregion.providers.litellm import LiteLLMBackend
+from brainregion.server import _describe_model_routes, _normalize_one, _normalize_panel, _resolve_endpoints
 
 
 # ===== _resolve_endpoints =====
@@ -232,7 +232,7 @@ def test_describe_model_routes_reports_same_model_on_multiple_endpoints(monkeypa
 
 
 def test_server_list_model_routes_tool(monkeypatch):
-    from brain_region import server
+    from brainregion import server
 
     monkeypatch.setattr(
         server._defaults_mod,

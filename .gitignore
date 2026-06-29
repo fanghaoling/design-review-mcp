@@ -18,6 +18,10 @@ design_review_config.json*
 # Local generated project data
 Assets/
 
+# Local tooling artifacts (codegraph index, brain-region eval/memory data)
+.codegraph/
+.brain-region/
+
 # Local one-off verification scripts
 scripts/verify_*
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brain_region.core.regions import RegionDefinition, list_regions, load_region, route_regions
+from brainregion.core.regions import RegionDefinition, list_regions, load_region, route_regions
 
 
 def test_list_and_load_builtin_regions():
@@ -87,8 +87,8 @@ def test_route_regions_validates_limits():
 
 
 def test_server_route_regions_tool():
-    from brain_region.server import list_regions as server_list_regions
-    from brain_region.server import route_regions as server_route_regions
+    from brainregion.server import list_regions as server_list_regions
+    from brainregion.server import route_regions as server_route_regions
 
     listed = server_list_regions()
     assert any(region["id"] == "debugging" for region in listed["regions"])

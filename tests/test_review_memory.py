@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from brain_region import reviews_db
-from brain_region.core.pipeline import PipelineContext
-from brain_region.core.report import CanonicalFinding, Finding
-from brain_region.core.stages.dedup import DedupStage
-from brain_region.core.stages.parse import ParseStage
-from brain_region.core.stages.score import _calibrate, _reliability_factor
-from brain_region.providers.base import ModelResponse
+from brainregion import reviews_db
+from brainregion.core.pipeline import PipelineContext
+from brainregion.core.report import CanonicalFinding, Finding
+from brainregion.core.stages.dedup import DedupStage
+from brainregion.core.stages.parse import ParseStage
+from brainregion.core.stages.score import _calibrate, _reliability_factor
+from brainregion.providers.base import ModelResponse
 
 
 @pytest.fixture
@@ -222,7 +222,7 @@ def test_dedup_higher_conf_replaces_inherits_old_id():
 
 def test_rebuild_report_fills_missing_id():
     """旧缓存 finding 无 id → _rebuild_report 就地补填 f"{model}-{idx}"。"""
-    from brain_region.server import _rebuild_report
+    from brainregion.server import _rebuild_report
     old = {
         "document_type": "markdown", "adapter": "unity", "project_version": {},
         "panel": ["gpt-4o"], "failed_models": [], "retrieved_cases": [],
@@ -242,7 +242,7 @@ def test_rebuild_report_fills_missing_id():
 # ===== mark_finding 反查 =====
 
 def test_mark_finding_with_params_hash(isolated_db):
-    from brain_region.server import mark_finding
+    from brainregion.server import mark_finding
     report = {
         "document_type": "markdown", "adapter": "unity", "project_version": {},
         "panel": ["gpt-4o"], "failed_models": [], "retrieved_cases": [],
@@ -263,7 +263,7 @@ def test_mark_finding_with_params_hash(isolated_db):
 
 def test_mark_finding_finds_via_deduped_ids(isolated_db):
     """断链点 A 反查：finding 在 deduped_ids 里（被去重）也能 mark。"""
-    from brain_region.server import mark_finding
+    from brainregion.server import mark_finding
     report = {
         "document_type": "markdown", "adapter": "unity", "project_version": {},
         "panel": ["glm"], "failed_models": [], "retrieved_cases": [],
@@ -284,7 +284,7 @@ def test_mark_finding_finds_via_deduped_ids(isolated_db):
 
 
 def test_mark_finding_invalid_inputs(isolated_db):
-    from brain_region.server import mark_finding
+    from brainregion.server import mark_finding
     with pytest.raises(ValueError):
         mark_finding(finding_id="no-seq-here", decision="accepted")  # 格式错（无 -数字 结尾）
     with pytest.raises(ValueError):
@@ -292,7 +292,7 @@ def test_mark_finding_invalid_inputs(isolated_db):
 
 
 def test_mark_finding_not_found(isolated_db):
-    from brain_region.server import mark_finding
+    from brainregion.server import mark_finding
     with pytest.raises(ValueError):
         mark_finding(finding_id="gpt-4o-0", decision="accepted")  # 无 review 含此 id，未传 params_hash
 
@@ -368,7 +368,7 @@ def test_record_overwrites_stale_row(isolated_db):
 def test_mark_finding_consecutive_marks_no_break(isolated_db):
     """连续标同 review 多条 finding（默认 invalidate=True）不断链。
     原 bug：第 1 条 DELETE report → 第 2 条 lookup_report=None → raise ValueError。"""
-    from brain_region.server import mark_finding
+    from brainregion.server import mark_finding
     report = {
         "document_type": "markdown", "adapter": "unity", "project_version": {},
         "panel": ["gpt-4o"], "failed_models": [], "retrieved_cases": [],

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from brain_region.core.workflow import suggest_workflow
+from brainregion.core.workflow import suggest_workflow
 
 
 def _tools(result: dict) -> list[str]:
@@ -91,7 +91,7 @@ def test_suggest_workflow_empty_input_has_no_actions():
 
 
 def test_server_suggest_workflow_tool():
-    from brain_region.server import suggest_workflow as server_suggest_workflow
+    from brainregion.server import suggest_workflow as server_suggest_workflow
 
     result = server_suggest_workflow(problem="debug a flaky failure", top_k=2)
     assert result["next_actions"][0]["tool"] == "consult_problem"

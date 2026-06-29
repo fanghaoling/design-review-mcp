@@ -15,7 +15,7 @@ import logging
 
 from ..pipeline import PipelineContext
 
-logger = logging.getLogger("brain_region.stage.review")
+logger = logging.getLogger("brainregion.stage.review")
 
 # 手维护的每百万 token 价格（input, output USD）——覆盖贵模型（Claude/GPT），让预算上限对它们
 # 有意义。不在表里的（glm/deepseek 等 litellm 无价或便宜的）用名义单价。价格变动时更新此处。

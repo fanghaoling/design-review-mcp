@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-logger = logging.getLogger("brain_region.prior")
+logger = logging.getLogger("brainregion.prior")
 
 _CACHE: dict | None = None  # preset 框架文件不变，模块级缓存（启动加载一次，非每次 review 读）
 

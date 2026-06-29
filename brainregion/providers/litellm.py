@@ -19,7 +19,7 @@ from .base import ModelResponse
 
 litellm.suppress_debug_info = True  # 抑制 litellm stdout banner（CLI/MCP stdout 要纯 JSON/JSON-RPC）
 
-logger = logging.getLogger("brain_region.provider.litellm")
+logger = logging.getLogger("brainregion.provider.litellm")
 
 
 def _effort_kwargs(model: str, effort: str | None) -> dict:

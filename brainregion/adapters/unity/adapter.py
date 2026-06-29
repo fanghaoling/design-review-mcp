@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .._common import read_claude_md
 
-logger = logging.getLogger("brain_region.adapter.unity")
+logger = logging.getLogger("brainregion.adapter.unity")
 
 
 class UnityAdapter:

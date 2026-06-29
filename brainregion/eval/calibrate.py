@@ -15,7 +15,7 @@ import yaml
 
 from .judge import judge_task
 
-logger = logging.getLogger("brain_region.eval.calibrate")
+logger = logging.getLogger("brainregion.eval.calibrate")
 
 
 def _to_report(findings: list) -> dict:

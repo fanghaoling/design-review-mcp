@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from brain_region.core.reviewers.loader import list_reviewers, load_reviewer
+from brainregion.core.reviewers.loader import list_reviewers, load_reviewer
 
 CORE = (
     Path(__file__).resolve().parents[1]
-    / "brain_region"
+    / "brainregion"
     / "core"
     / "reviewers"
 )

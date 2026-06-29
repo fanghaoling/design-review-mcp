@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from brain_region.server import _describe_model_routes, _normalize_panel
+from brainregion.server import _describe_model_routes, _normalize_panel
 
 
 def test_normalize_panel_accepts_endpoint_model_objects():

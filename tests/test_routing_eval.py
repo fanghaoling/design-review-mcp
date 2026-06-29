@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from brain_region.eval.cli import load_tasks
-from brain_region.eval.routing import (
+from brainregion.eval.cli import load_tasks
+from brainregion.eval.routing import (
     DEFAULT_ROUTING_VARIANTS,
     RoutingRecord,
     compute_routing_summary,
@@ -16,7 +16,7 @@ from brain_region.eval.routing import (
     run_routing_eval,
 )
 
-_FIXTURES = Path(__file__).resolve().parent.parent / "brain_region" / "eval" / "routing_fixtures"
+_FIXTURES = Path(__file__).resolve().parent.parent / "brainregion" / "eval" / "routing_fixtures"
 
 
 def _rec(task_id: str, variant: str, gold: list[str], woken: list[str]) -> RoutingRecord:

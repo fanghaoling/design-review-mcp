@@ -19,7 +19,7 @@ import re
 from ..core.stages.parse import extract_json_object
 from .schema import BlindJudgement
 
-logger = logging.getLogger("brain_region.eval.judge")
+logger = logging.getLogger("brainregion.eval.judge")
 
 _CASE_PREFIX_RE = re.compile(r"^\[[^\]]*\]\s*")
 

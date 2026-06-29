@@ -3,20 +3,28 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def test_ping_reports_brain_region_name():
-    from brain_region.server import ping
+def test_import_brainregion_package():
+    """package discovery 改坏第一时间发现（包名/import/__version__ 一次覆盖）。"""
+    import brainregion
+
+    assert brainregion.__version__
+
+
+def test_ping_reports_brainregion_name():
+    from brainregion.server import ping
 
     got = ping()
 
-    assert got["name"] == "brain_region"
-    assert got["legacy_name"] == "design_review"
+    assert got["name"] == "brainregion"
+    assert got["legacy_name"] == "brain_region"
 
 
-def test_pyproject_exposes_brain_region_commands_and_legacy_aliases():
+def test_pyproject_exposes_brainregion_command_and_legacy_aliases():
     text = Path("pyproject.toml").read_text(encoding="utf-8")
 
-    assert 'name = "brain-region-mcp"' in text
-    assert 'brain-region-mcp = "brain_region.server:main"' in text
-    assert 'brain-region = "brain_region.cli:main"' in text
-    assert 'design-review-mcp = "brain_region.server:main"' in text
-    assert 'design-review = "brain_region.cli:main"' in text
+    assert 'name = "brainregion"' in text
+    assert 'brainregion = "brainregion.cli:main"' in text
+    assert 'brain-region = "brainregion.cli:main"' in text
+    assert 'brain-region-mcp = "brainregion.server:main"' in text
+    assert 'design-review-mcp = "brainregion.server:main"' in text
+    assert 'design-review = "brainregion.cli:main"' in text

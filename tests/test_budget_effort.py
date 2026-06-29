@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import asyncio
 
-from brain_region.core import ReviewDocument
-from brain_region.core.pipeline import PipelineContext
-from brain_region.core.stages.review import ReviewStage, select_jobs_within_budget
-from brain_region.providers.base import ModelResponse
+from brainregion.core import ReviewDocument
+from brainregion.core.pipeline import PipelineContext
+from brainregion.core.stages.review import ReviewStage, select_jobs_within_budget
+from brainregion.providers.base import ModelResponse
 
 
 def _job(model: str, dim: str = "ecs_perf") -> dict:
@@ -31,7 +31,7 @@ class _FakeBackend:
 # ===== provider 映射 =====
 
 def test_effort_kwargs_mapping():
-    from brain_region.providers.litellm import _effort_kwargs
+    from brainregion.providers.litellm import _effort_kwargs
 
     # Claude: output_config + adaptive thinking
     assert _effort_kwargs("claude-opus-4-8", "high") == {
@@ -53,7 +53,7 @@ def test_effort_kwargs_mapping():
 
 def test_budget_trim_keeps_prefix(monkeypatch):
     """max_cost_usd 限住：按 panel 顺序保留前缀，超的裁掉，exhausted=True。"""
-    from brain_region.core.stages import review as rev
+    from brainregion.core.stages import review as rev
 
     costs = iter([0.05, 0.05, 0.05, 0.05])
     monkeypatch.setattr(rev, "_estimate_job_cost", lambda job: next(costs))
@@ -66,7 +66,7 @@ def test_budget_trim_keeps_prefix(monkeypatch):
 
 def test_budget_trim_all_fit(monkeypatch):
     """预算够 = 全跑，exhausted=False。"""
-    from brain_region.core.stages import review as rev
+    from brainregion.core.stages import review as rev
 
     monkeypatch.setattr(rev, "_estimate_job_cost", lambda job: 0.01)
     jobs = [_job("a"), _job("b"), _job("c")]
@@ -89,7 +89,7 @@ def test_effort_passthrough_to_backend():
 
 
 def test_budget_runs_subset(monkeypatch):
-    from brain_region.core.stages import review as rev
+    from brainregion.core.stages import review as rev
 
     monkeypatch.setattr(rev, "_estimate_job_cost", lambda job: 0.05)
     backend = _FakeBackend()
@@ -118,7 +118,7 @@ def test_no_budget_runs_all():
 # ===== 单价表（ISS-003：旗舰模型必须有价，否则名义单价让预算护栏严重低估）=====
 
 def test_estimate_job_cost_uses_real_price_for_flagship():
-    from brain_region.core.stages.review import _estimate_job_cost, _NOMINAL_COST_USD
+    from brainregion.core.stages.review import _estimate_job_cost, _NOMINAL_COST_USD
 
     # gpt-5.5 在价表里 → 用真实单价，远高于名义单价（防 ISS-003 的 ~21× 低估）
     cost = _estimate_job_cost(_job("gpt-5.5"))
@@ -129,7 +129,7 @@ def test_estimate_job_cost_uses_real_price_for_flagship():
 
 
 def test_estimate_job_cost_nominal_for_unknown_cheap_model():
-    from brain_region.core.stages.review import _estimate_job_cost, _NOMINAL_COST_USD
+    from brainregion.core.stages.review import _estimate_job_cost, _NOMINAL_COST_USD
 
     # glm 等不在价表的便宜模型 → 名义单价（保守，略高于实际）
     assert _estimate_job_cost(_job("zai/glm-5.2")) == _NOMINAL_COST_USD

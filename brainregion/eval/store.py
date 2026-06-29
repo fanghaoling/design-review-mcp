@@ -15,7 +15,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-logger = logging.getLogger("brain_region.eval.store")
+logger = logging.getLogger("brainregion.eval.store")
 
 
 def _db_path() -> Path:

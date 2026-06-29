@@ -18,10 +18,10 @@ import json
 import sys
 from pathlib import Path
 
-from brain_region.server import review_document
+from brainregion.server import review_document
 
 # eval 子命令单独编排（不走 review_document；它直接调 engine 做 A/B 隔离）
-from brain_region.eval import cli as eval_cli
+from brainregion.eval import cli as eval_cli
 
 
 def _read_text_input(args) -> str:

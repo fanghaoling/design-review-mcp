@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from brain_region.core.planner import PlanReport, PlanRequest, PlannerEngine, parse_plan, prepare_plan_request
-from brain_region.providers.base import ModelResponse
+from brainregion.core.planner import PlanReport, PlanRequest, PlannerEngine, parse_plan, prepare_plan_request
+from brainregion.providers.base import ModelResponse
 
 
 class _PlannerBackend:
@@ -217,7 +217,7 @@ async def test_planner_parse_error_diagnostics_are_redacted():
 
 @pytest.mark.asyncio
 async def test_plan_task_routing_metadata(monkeypatch):
-    from brain_region import server
+    from brainregion import server
 
     class _FakeEngine:
         async def plan(self, *args, **kwargs):

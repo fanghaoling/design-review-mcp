@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import asyncio
 
-from brain_region.core import ReviewDocument
-from brain_region.core.pipeline import PipelineContext
-from brain_region.core.report import CanonicalFinding, Finding
-from brain_region.core.stages.dedup import DedupStage
-from brain_region.core.stages.normalize import merge_canonical_by_case_ref
-from brain_region.knowledge.base import Case
+from brainregion.core import ReviewDocument
+from brainregion.core.pipeline import PipelineContext
+from brainregion.core.report import CanonicalFinding, Finding
+from brainregion.core.stages.dedup import DedupStage
+from brainregion.core.stages.normalize import merge_canonical_by_case_ref
+from brainregion.knowledge.base import Case
 
 
 def _finding(model, title, case_ref=None, confidence=0.8, dimension="ecs_perf"):

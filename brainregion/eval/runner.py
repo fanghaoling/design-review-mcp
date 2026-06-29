@@ -23,7 +23,7 @@ from .knowledge import GarbageKnowledgeProvider
 from .metadata import defaults_hash, git_sha, knowledge_hash, reviewer_hash
 from .schema import EvalCaseRecord, EvalLedgerEntry, VariantSpec
 
-logger = logging.getLogger("brain_region.eval.runner")
+logger = logging.getLogger("brainregion.eval.runner")
 
 # bootstrap 默认三变体（off:on:garbage）
 DEFAULT_VARIANTS = [

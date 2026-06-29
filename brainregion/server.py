@@ -28,7 +28,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     stream=sys.stderr,
 )
-logger = logging.getLogger("brain_region")
+logger = logging.getLogger("brainregion")
 
 # 加载 .env（若存在）到 os.environ：litellm 据此读 API key。.env 已 gitignore，不进 git。
 # 系统环境变量优先（load_dotenv 默认不覆盖已存在的 env）。
@@ -36,7 +36,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-mcp = FastMCP("brain_region")
+mcp = FastMCP("brainregion")
 
 from . import defaults as _defaults_mod  # noqa: E402
 from . import output, prior as prior_mod, reviews_db  # noqa: E402
@@ -719,7 +719,7 @@ def ping() -> dict:
     """健康检查：确认 BrainRegion MCP server 可达。"""
     from . import __version__
 
-    return {"ok": True, "name": "brain_region", "legacy_name": "design_review", "version": __version__}
+    return {"ok": True, "name": "brainregion", "legacy_name": "brain_region", "version": __version__}
 
 
 # v2 Review Memory：标记 finding 采纳，写入 reliability 飞轮
@@ -1267,7 +1267,7 @@ def main() -> None:
     """MCP server 入口（默认 stdio transport）。"""
     from . import __version__
 
-    logger.info("brain-region-mcp %s starting (stdio)", __version__)
+    logger.info("brainregion %s starting (stdio)", __version__)
     mcp.run()
 
 

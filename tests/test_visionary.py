@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import asyncio
 
-from brain_region.core.document import ReviewDocument
-from brain_region.core.pipeline import PipelineContext
-from brain_region.core.stages import CORE_REVIEWERS_DIR
-from brain_region.core.stages.parse import ParseStage
-from brain_region.core.stages.prompt import PromptStage, _compress_document
-from brain_region.core.stages.score import ScoreStage
-from brain_region.core.reviewers.loader import load_reviewer
-from brain_region.providers.base import ModelResponse
+from brainregion.core.document import ReviewDocument
+from brainregion.core.pipeline import PipelineContext
+from brainregion.core.stages import CORE_REVIEWERS_DIR
+from brainregion.core.stages.parse import ParseStage
+from brainregion.core.stages.prompt import PromptStage, _compress_document
+from brainregion.core.stages.score import ScoreStage
+from brainregion.core.reviewers.loader import load_reviewer
+from brainregion.providers.base import ModelResponse
 
 
 class _MockAdapter:

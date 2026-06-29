@@ -13,7 +13,7 @@ from ..pipeline import PipelineContext
 from ..report import Finding
 from ..schema import get_schema
 
-logger = logging.getLogger("brain_region.stage.parse")
+logger = logging.getLogger("brainregion.stage.parse")
 
 _FENCE_OPEN_RE = re.compile(r"```(?:json)?\s*")
 _schema_cache: dict | None = None

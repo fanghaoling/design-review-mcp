@@ -1,5 +1,5 @@
 [project]
-name = "brain-region-mcp"
+name = "brainregion"
 version = "0.1.0"
 description = "BrainRegion（脑区）：AI collaboration infrastructure for review, consultation, planning, and memory."
 readme = "README.md"
@@ -17,27 +17,31 @@ dependencies = [
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.6"]
 
 [project.scripts]
-brain-region-mcp = "brain_region.server:main"
-brain-region = "brain_region.cli:main"
-design-review-mcp = "brain_region.server:main"
-design-review = "brain_region.cli:main"
+brainregion = "brainregion.cli:main"
+brain-region = "brainregion.cli:main"
+brain-region-mcp = "brainregion.server:main"
+design-review-mcp = "brainregion.server:main"
+design-review = "brainregion.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["brain_region"]
+packages = ["brainregion"]
 
-# yaml/json schema 随包发布进 wheel（开发时 uv run 用源码路径读取，force-include 仅 pip 发布生效）。
-# generic adapter 无自己的 reviewers（回退 core 通用），故不含 generic/reviewers。
-[tool.hatch.build.targets.wheel.force-include]
-"brain_region/core/reviewers" = "brain_region/core/reviewers"
-"brain_region/core/consultants" = "brain_region/core/consultants"
-"brain_region/core/regions" = "brain_region/core/regions"
-"brain_region/core/schema" = "brain_region/core/schema"
-"brain_region/adapters/unity/reviewers" = "brain_region/adapters/unity/reviewers"
-"brain_region/adapters/unity/knowledge" = "brain_region/adapters/unity/knowledge"
+# packages = ["brainregion"] 已递归包含包内全部文件（reviewers/consultants/regions 的 yaml
+# 和 schema/*.json 都在内），无需 force-include —— 它反而让 __init__.py 等被重复包含、wheel 构建失败。
+[tool.hatch.build.targets.sdist]
+exclude = [
+  ".codegraph",
+  ".brain-region",
+  ".venv",
+  "dist",
+  "Assets",
+  ".pytest_cache",
+  ".ruff_cache",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

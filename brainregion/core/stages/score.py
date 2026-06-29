@@ -11,7 +11,7 @@ from ..errors import classify_error
 from ..pipeline import PipelineContext
 from ..report import ReviewReport
 
-logger = logging.getLogger("brain_region.stage.score")
+logger = logging.getLogger("brainregion.stage.score")
 
 _CONSENSUS_FACTOR = {"consensus": 1.0, "majority": 0.7, "individual": 0.3}
 

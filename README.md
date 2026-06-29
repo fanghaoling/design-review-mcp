@@ -4,7 +4,7 @@
 
 BrainRegion is AI collaboration infrastructure for review, consultation, planning, and memory.
 
-This project was formerly `design-review-mcp`. The internal Python package has moved to `brain_region`, while the old
+This project was formerly `design-review-mcp`. The internal Python package has moved to `brainregion`, while the old
 CLI command aliases remain available during the rename.
 
 The current MCP server and CLI can fan out a plan, source change, or document to multiple LLM reviewer roles, retrieve
@@ -460,7 +460,7 @@ SARIF output can be uploaded to GitHub Code Scanning or consumed by IDEs.
 ## Project Layout
 
 ```text
-brain_region/
+brainregion/
   server.py              # MCP server entry point
   cli.py                 # brain-region CLI
   core/                  # pipeline, stages, schemas, report models

@@ -14,7 +14,7 @@ from collections import defaultdict
 from ..pipeline import PipelineContext
 from ..report import Finding
 
-logger = logging.getLogger("brain_region.stage.consensus")
+logger = logging.getLogger("brainregion.stage.consensus")
 
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

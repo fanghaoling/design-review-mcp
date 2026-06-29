@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from brain_region.eval import judge, knowledge, metadata, runner, store
-from brain_region.eval.schema import (
+from brainregion.eval import judge, knowledge, metadata, runner, store
+from brainregion.eval.schema import (
     BlindJudgement, EvalCaseRecord, EvalLedgerEntry, EvalTask, VariantSpec,
 )
-from brain_region.providers.base import ModelResponse
+from brainregion.providers.base import ModelResponse
 
 
 # ---------- schema ----------
@@ -234,7 +234,7 @@ def test_sanity_clean_when_ordered():
 # ---------- parse_variants (cli) ----------
 
 def test_parse_variants():
-    from brain_region.eval import cli as eval_cli
+    from brainregion.eval import cli as eval_cli
     vs = eval_cli.parse_variants("retrieve_off:0,retrieve_on:5,retrieve_garbage:5g")
     assert vs[0].name == "retrieve_off" and vs[0].retrieve_top_k == 0 and vs[0].garbage is False
     assert vs[1].retrieve_top_k == 5
@@ -247,7 +247,7 @@ class _FakeReport:
     """最小 report 替身：实现 run_variant 用到的属性。"""
 
     def __init__(self, retrieved, consensus_titles):
-        from brain_region.core.report import ReviewReport, CanonicalFinding, Finding
+        from brainregion.core.report import ReviewReport, CanonicalFinding, Finding
         cfs = [CanonicalFinding(canonical_title=t, dimension="d", severity="high",
                                 evidence_quote="q", location="l", suggestion="s", case_ref=None,
                                 flagged_by=["m"], source_findings=[

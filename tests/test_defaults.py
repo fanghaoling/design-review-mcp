@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from brain_region import defaults
+from brainregion import defaults
 
 
 def _write_json(path: Path, data: dict) -> None:

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-logger = logging.getLogger("brain_region.reviewers")
+logger = logging.getLogger("brainregion.reviewers")
 
 # 合并语义为「列表」的字段（子追加到父后去重保序）；其余标量子覆盖父。
 _LIST_FIELDS = {"focus_checklist"}

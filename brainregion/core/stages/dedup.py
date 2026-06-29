@@ -14,7 +14,7 @@ import re
 
 from ..pipeline import PipelineContext
 
-logger = logging.getLogger("brain_region.stage.dedup")
+logger = logging.getLogger("brainregion.stage.dedup")
 
 # 词 token：英文/数字/下划线连续段，或单个中文字符。
 _WORD_RE = re.compile(r"[A-Za-z0-9_]+|[一-鿿]")

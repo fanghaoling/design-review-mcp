@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from brain_region.core.regions import RegionDefinition
-from brain_region.core.wake import wake_gate
+from brainregion.core.regions import RegionDefinition
+from brainregion.core.wake import wake_gate
 
 
 # ---------- 三层非塌缩（审核②）----------

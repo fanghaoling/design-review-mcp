@@ -1,7 +1,7 @@
 """v2.2 prior.py：_convert (r,κ)→(α,β) + load mode 三态（none/builtin/custom）。"""
 from __future__ import annotations
 
-from brain_region import prior
+from brainregion import prior
 
 
 def test_convert_r_kappa_to_alpha_beta():

@@ -20,7 +20,7 @@ import yaml
 
 from .base import Case, version_matches
 
-logger = logging.getLogger("brain_region.knowledge.yaml")
+logger = logging.getLogger("brainregion.knowledge.yaml")
 
 
 def extract_keyword_hits(text: str, cases: list[Case]) -> set[str]:

@@ -4,7 +4,7 @@
 
 BrainRegion 是面向 review、consultation、planning 和 memory 的 AI 协作基础设施。
 
-这个项目原名 `design-review-mcp`。内部 Python 包名已经迁移到 `brain_region`；重命名期间旧命令别名仍然保留，避免已有配置突然失效。
+这个项目原名 `design-review-mcp`。内部 Python 包名已经迁移到 `brainregion`；重命名期间旧命令别名仍然保留，避免已有配置突然失效。
 
 当前 MCP server 和 CLI 可以把方案、代码变更或文档分发给多个 LLM reviewer，结合项目知识库检索、finding 归一化和共识汇总，生成更容易落地处理的审查报告。同时也支持外援会诊：当主模型卡住或需要第三方视角时，用 `consult_problem` 调用外部专家模型。
 
@@ -438,7 +438,7 @@ SARIF 输出可以上传到 GitHub Code Scanning，也可以被 IDE 消费。
 ## 项目结构
 
 ```text
-brain_region/
+brainregion/
   server.py              # MCP server 入口
   cli.py                 # brain-region CLI
   core/                  # pipeline、stage、schema、report model

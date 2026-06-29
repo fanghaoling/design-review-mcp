@@ -21,12 +21,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 UNITY_PROJECT = ROOT.parent.parent  # ROOT=Tools/brain-region-mcp → 上两级 = 游戏项目根
 
-from brain_region.adapters.unity import UnityAdapter
-from brain_region.core import ReviewDocument
-from brain_region.core.engine import ReviewEngine
-from brain_region.core.stages import build_default_pipeline
-from brain_region.knowledge import YamlKnowledgeProvider
-from brain_region.providers import LiteLLMBackend
+from brainregion.adapters.unity import UnityAdapter
+from brainregion.core import ReviewDocument
+from brainregion.core.engine import ReviewEngine
+from brainregion.core.stages import build_default_pipeline
+from brainregion.knowledge import YamlKnowledgeProvider
+from brainregion.providers import LiteLLMBackend
 
 # 每条种子案例的"含 bug 方案"探针（人工构造，模拟真实会写出的错误代码/方案）。
 # 这些探针对应 framework 随包的【通用】案例。项目特定案例（自家网络同步设计等）在本地

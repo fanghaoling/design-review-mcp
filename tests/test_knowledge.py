@@ -1,7 +1,7 @@
 """知识库：版本匹配 + retrieve + 渲染。"""
 from __future__ import annotations
 
-from brain_region.knowledge import (
+from brainregion.knowledge import (
     Case,
     YamlKnowledgeProvider,
     constraint_ok,
@@ -79,8 +79,8 @@ def test_yaml_provider_version_filter(tmp_path):
 
 
 def test_brain_region_local_knowledge_dir_overlays_legacy_dir(tmp_path):
-    from brain_region.adapters.generic import GenericAdapter
-    from brain_region.server import _knowledge_dirs
+    from brainregion.adapters.generic import GenericAdapter
+    from brainregion.server import _knowledge_dirs
 
     legacy = tmp_path / ".design-review" / "knowledge"
     brain_region = tmp_path / ".brain-region" / "knowledge"

@@ -15,7 +15,7 @@ import logging
 from ..core.stages.parse import extract_json_object
 from .base import FindingAttachment, TransformResult
 
-logger = logging.getLogger("brain_region.privacy.strict")
+logger = logging.getLogger("brainregion.privacy.strict")
 
 _TRANSFORM_SCHEMA = json.dumps(
     {

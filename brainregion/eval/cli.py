@@ -28,7 +28,7 @@ from .routing import (
 from .runner import build_engines, make_run_id, run_eval
 from .schema import EvalTask, VariantSpec
 
-logger = logging.getLogger("brain_region.eval.cli")
+logger = logging.getLogger("brainregion.eval.cli")
 
 _DEFAULT_RUBRIC = Path(__file__).parent / "rubrics" / "review_v1.md"
 

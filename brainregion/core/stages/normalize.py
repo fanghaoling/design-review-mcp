@@ -20,7 +20,7 @@ import re
 from ..pipeline import PipelineContext
 from ..report import CanonicalFinding, Finding
 
-logger = logging.getLogger("brain_region.stage.normalize")
+logger = logging.getLogger("brainregion.stage.normalize")
 
 _BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _SEV = {"high": 0, "medium": 1, "low": 2}

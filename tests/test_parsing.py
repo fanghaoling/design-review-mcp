@@ -1,7 +1,7 @@
 """ParseStage：JSON 提取（鲁棒 fallback）+ normalize_finding（放宽校验 + evidence 强制）。"""
 from __future__ import annotations
 
-from brain_region.core.stages.parse import extract_json_object, normalize_finding
+from brainregion.core.stages.parse import extract_json_object, normalize_finding
 
 _GOOD = {
     "dimension": "ecs_perf",
