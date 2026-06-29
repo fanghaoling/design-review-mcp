@@ -1,0 +1,12 @@
+id: eval-002
+task_type: review
+difficulty: simple
+notes: 无知识重叠样本（通用 Python API）；retrieve 预期接近无信号（no-signal 对照，验证尺子在无差异时平稳）
+input:
+  document_type: markdown
+  dimensions: [feasibility, planner]
+  content: |
+    # 用户分页查询接口设计
+
+    GET /api/users 支持分页。方案：query 参数 page、size；后端用 LIMIT/OFFSET；
+    返回 {items, page, size, total}。无缓存。

@@ -20,6 +20,9 @@ from pathlib import Path
 
 from brain_region.server import review_document
 
+# eval 子命令单独编排（不走 review_document；它直接调 engine 做 A/B 隔离）
+from brain_region.eval import cli as eval_cli
+
 
 def _read_text_input(args) -> str:
     """plan/doc 输入优先级：--text > 文件路径 > stdin(-)。"""
@@ -75,11 +78,64 @@ def build_parser() -> argparse.ArgumentParser:
                        choices=["markdown", "adr", "rfc", "config"])
     _add_review_args(p_doc)
 
+    p_eval = sub.add_parser("eval", help="跑评测 harness（bootstrap 尺子：retrieve off/on/garbage + 盲评）")
+    p_eval.add_argument("fixtures_dir", help="fixtures 目录（*.yaml 任务，每文件一个 EvalTask 或 list）")
+    p_eval.add_argument("--adapter", default="auto", choices=["auto", "unity", "generic"])
+    p_eval.add_argument("--panel", nargs="*", default=None, help="review panel 覆盖（建议单便宜模型控成本）")
+    p_eval.add_argument("--dimensions", nargs="*", default=None)
+    p_eval.add_argument(
+        "--variants", default="retrieve_off:0,retrieve_on:5,retrieve_garbage:5g",
+        help="变体 name:k[,..]，k 后缀 g 或第三段 g = garbage 负对照",
+    )
+    p_eval.add_argument("--judges", nargs="*", default=None, help="judge 模型列表（默认 normalizer_model）")
+    p_eval.add_argument("--effort", default=None, choices=["low", "medium", "high", "xhigh", "max"])
+    p_eval.add_argument("--max-cost-usd", type=float, default=None)
+    p_eval.add_argument("--rubric", default=None, help="rubric 文件（默认 eval/rubrics/review_v1.md）")
+    p_eval.add_argument("--export", default=None, help="导出本次 run 为 JSONL 路径")
+    p_eval.add_argument("--output", dest="output_format", default="json", choices=["json", "markdown"])
+    p_eval.add_argument("--output-file", default=None)
+
     return parser
 
 
+def _eval_markdown(result: dict) -> str:
+    """eval 汇总的简易 markdown 渲染（json 是主输出）。"""
+    s = result.get("summary", {})
+    pv = s.get("per_variant", {})
+    lines = [
+        f"# Eval run {result.get('run_id', '')}", "",
+        f"tasks={result.get('n_tasks')} variants={result.get('variants')} "
+        f"judges={result.get('judge_models')}", "",
+    ]
+    for name, m in pv.items():
+        lines.append(
+            f"- **{name}**: useful_rate={m.get('useful_advice_rate')} "
+            f"cost/useful={m.get('cost_per_useful_advice')} "
+            f"mean_overall={m.get('mean_overall')} "
+            f"p50={m.get('latency_p50_ms')}ms p95={m.get('latency_p95_ms')}ms"
+        )
+    sanity = s.get("sanity", {})
+    if sanity.get("errors"):
+        lines += ["", "## ❌ Sanity errors"] + [f"- {e}" for e in sanity["errors"]]
+    if sanity.get("warnings"):
+        lines += ["", "## ⚠️ Sanity warnings"] + [f"- {w}" for w in sanity["warnings"]]
+    return "\n".join(lines)
+
+
 def main() -> None:
+    # Windows GBK 控制台无法 print emoji（🔴⚠️ 等，output/markdown 与 eval 都会用到）→ 重配 stdout
+    # 为 utf-8 + errors=replace，至少不崩（实际显示取决于终端 codepage）。
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 — stdout 不可重配（如被捕获）时静默
+        pass
     args = build_parser().parse_args()
+    if args.command == "eval":
+        result = asyncio.run(eval_cli.run(args))
+        if args.output_format != "json":
+            result["rendered"] = _eval_markdown(result)
+        _emit(result, args)
+        return
     common = dict(
         adapter=args.adapter, panel=args.panel, dimensions=args.dimensions,
         output_format=args.output_format, retrieve_top_k=args.retrieve_top_k,

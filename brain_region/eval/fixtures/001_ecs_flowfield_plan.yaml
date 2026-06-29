@@ -1,0 +1,16 @@
+id: eval-001
+task_type: review
+difficulty: complex
+notes: 跨领域样本（Unity ECS 性能）；若 adapter=unity 可能命中 Burst/Allocator 案例（retrieve_on 预期有信号）
+input:
+  document_type: markdown
+  dimensions: [feasibility, performance]
+  content: |
+    # FlowField 寻路系统优化方案
+
+    每帧为 2000 个单位重算流场。当前实现：主线程循环遍历所有 cell，为每个单位
+    单独查询目标方向，并在循环内 new 临时数组。偶发卡顿出现在 CompleteDependency 附近。
+
+    方案：把单位按 chunk 分组，每组用一个 IJobChunk 并行计算方向；用 NativeArray 复用
+    临时缓冲；依赖用 CombineDependencies 合并。
+input_panel_marker: inherit_dd
