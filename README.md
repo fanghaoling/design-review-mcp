@@ -27,6 +27,7 @@ without changing the core pipeline.
 - Ask external consultant models with `consult_problem` and record useful advice with `mark_advice`.
 - Generate executable task plans with `plan_task`, then review the plan before implementation.
 - Route a goal/problem to likely Brain Regions with `route_regions` as a local, deterministic precursor to context scheduling.
+- Suggest explicit manual next steps with `suggest_workflow` without auto-calling tools or models.
 - Merge defaults from builtin values, global config, project config, environment variables, and explicit call arguments.
 
 ## Architecture
@@ -194,6 +195,23 @@ Example result shape:
 
 Built-in regions currently include `planning`, `review`, `debugging`, `performance`, `security`, `memory`, `research`,
 and `unity_ecs`. This tool is advisory; future schedulers must explicitly decide whether to consume its result.
+
+## Workflow Suggestions
+
+`suggest_workflow` builds on `route_regions` and returns explicit next tool-call suggestions for the main assistant or
+user to approve. It is still local and deterministic: it does not call models, run review/consult/planner tools, read
+memory, or edit files.
+
+```python
+suggest_workflow(
+    goal="Optimize a Unity ECS FlowField system and review the implementation plan",
+    files={"Assets/Scripts/FlowFieldSystem.cs": "..."},
+)
+```
+
+Example actions may include `plan_task`, `consult_problem`, `review_document`, or `review_code`. Every action includes
+`requires_user_approval: true`, a short reason, suggested arguments, source regions, and trace metadata. This is the
+safe bridge between region routing and a future Context Scheduler.
 
 ## Knowledge Base
 

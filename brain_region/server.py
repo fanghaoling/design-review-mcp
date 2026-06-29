@@ -50,6 +50,7 @@ from .core.regions import REGIONS_DIR, load_regions as _load_regions  # noqa: E4
 from .core.regions import route_regions as _route_regions  # noqa: E402
 from .core.report import CanonicalFinding, Finding, ReviewReport  # noqa: E402
 from .core.reviewers.loader import list_reviewers as _list_reviewer_files  # noqa: E402
+from .core.workflow import suggest_workflow as _suggest_workflow  # noqa: E402
 from .core.stages import CORE_REVIEWERS_DIR, build_default_pipeline  # noqa: E402
 from .core import ReviewDocument  # noqa: E402
 from .knowledge import YamlKnowledgeProvider  # noqa: E402
@@ -772,6 +773,32 @@ def route_regions(
     used only as weak metadata.
     """
     return _route_regions(
+        goal=goal,
+        problem=problem,
+        context=context,
+        files=files or {},
+        top_k=top_k,
+        min_score=min_score,
+        regions_dir=REGIONS_DIR,
+    )
+
+
+@mcp.tool()
+def suggest_workflow(
+    goal: str = "",
+    problem: str = "",
+    context: str = "",
+    files: dict[str, str] | None = None,
+    top_k: int = 3,
+    min_score: int = 2,
+) -> dict:
+    """Suggest explicit manual next tool calls from Brain Region routing.
+
+    This tool is advisory only: it calls the local deterministic router, then
+    returns candidate next actions such as plan_task, consult_problem,
+    review_document, or review_code. It never calls those tools or models.
+    """
+    return _suggest_workflow(
         goal=goal,
         problem=problem,
         context=context,
