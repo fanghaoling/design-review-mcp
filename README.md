@@ -30,6 +30,7 @@ without changing the core pipeline.
 - Suggest explicit manual next steps with `suggest_workflow` without auto-calling tools or models.
 - Inspect model routing with `list_model_routes` so bare model names and endpoint-backed models are not confused.
 - Attach model profile metadata such as `cheap`, `fast`, `flagship`, `sleep`, or `awake` for preflight visibility.
+- Recommend a model panel with `suggest_panel` from profile tags and cost/speed/quality scores without calling models.
 - Merge defaults from builtin values, global config, project config, environment variables, and explicit call arguments.
 
 ## Architecture
@@ -379,8 +380,8 @@ For example, `"claude-opus-4-8"` is a bare official-provider route and usually n
 `"modelbridge_anthropic/claude-opus-4-8"` uses the configured gateway and its `MODEBRIDGE_API_KEY`. Run
 `list_model_routes` when you want to inspect the exact route before spending tokens.
 
-Model profile metadata is optional and descriptive. It is shown in `list_model_routes` and tool `routing` metadata, but
-does not automatically select models yet:
+Model profile metadata is optional and descriptive. It is shown in `list_model_routes`, `suggest_panel`, and tool
+`routing` metadata:
 
 ```jsonc
 {
@@ -406,6 +407,10 @@ does not automatically select models yet:
   }
 }
 ```
+
+`suggest_panel(strategy="cheap_fast" | "best_reasoning" | "balanced" | "sleep" | "awake" | "structured_output")`
+ranks configured routes by this profile metadata and returns `selected_panel`. It does not call models or automatically
+execute downstream tools.
 
 ## Cost And Effort Controls
 

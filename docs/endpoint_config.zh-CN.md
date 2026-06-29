@@ -115,7 +115,8 @@ list_model_routes(panel=[
 }
 ```
 
-Profile 只是给人和未来 scheduler 看的 preflight 元数据，目前不会自动选择模型。
+Profile 是给人和 scheduler 看的 preflight 元数据。`suggest_panel` 可以根据这些评分和标签对已配置的模型路由排序，
+返回 `selected_panel`，但不会调用模型，也不会自动执行后续工具。
 
 ## 常见错误
 

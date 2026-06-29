@@ -118,7 +118,8 @@ bare model name or an endpoint ref:
 }
 ```
 
-Profiles are descriptive preflight metadata for humans and future schedulers. They do not automatically select models.
+Profiles are descriptive preflight metadata for humans and schedulers. `suggest_panel` can rank configured routes from
+these scores and tags, returning a `selected_panel` without calling models or automatically executing downstream tools.
 
 ## Common Failures
 

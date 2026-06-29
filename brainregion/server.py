@@ -455,7 +455,20 @@ def _configured_endpoint_models(endpoints_cfg: dict) -> list[dict]:
     return endpoints
 
 
-def _route_warnings(routes: list[dict], ambiguous_models: list[dict]) -> list[dict]:
+_GATEWAY_PREFIX_MARKERS = ("modelbridge", "newapi", "oneapi", "gateway", "relay", "proxy")
+
+
+def _unknown_gateway_prefix(label: str, endpoint_ids: set[str]) -> str:
+    if "/" not in label:
+        return ""
+    prefix = label.split("/", 1)[0]
+    if prefix in endpoint_ids:
+        return ""
+    normalized = prefix.replace("-", "_").casefold()
+    return prefix if any(marker in normalized for marker in _GATEWAY_PREFIX_MARKERS) else ""
+
+
+def _route_warnings(routes: list[dict], ambiguous_models: list[dict], endpoint_ids: set[str]) -> list[dict]:
     warnings: list[dict] = []
     for route in routes:
         if route.get("route_type") == "configured_endpoint" and route.get("api_key_status") == "missing":
@@ -468,6 +481,21 @@ def _route_warnings(routes: list[dict], ambiguous_models: list[dict]) -> list[di
                     "message": f"Endpoint {route.get('endpoint_id')!r} key is not available in the current process.",
                 }
             )
+        if route.get("route_type") == "official_litellm":
+            prefix = _unknown_gateway_prefix(str(route.get("label") or ""), endpoint_ids)
+            if prefix:
+                warnings.append(
+                    {
+                        "type": "unknown_endpoint_prefix",
+                        "model": route.get("model"),
+                        "label": route.get("label"),
+                        "endpoint_id": prefix,
+                        "message": (
+                            f"Model spec {route.get('label')!r} looks like an endpoint/model ref, "
+                            f"but endpoint {prefix!r} is not configured; it will use official LiteLLM routing."
+                        ),
+                    }
+                )
     for item in ambiguous_models:
         model = item["model"]
         refs = item["endpoint_refs"]
@@ -578,12 +606,194 @@ def _describe_model_routes(panel: list | None, defaults: dict, *, panel_source: 
             ref for refs in endpoint_model_refs.values() for ref in refs
         ),
         "ambiguous_models": ambiguous_models,
-        "warnings": _route_warnings(routes, ambiguous_models),
+        "warnings": _route_warnings(routes, ambiguous_models, endpoint_ids),
         "notes": [
             "A bare model string such as 'claude-opus-4-8' uses the official LiteLLM provider route.",
             "Use 'endpoint_id/model' such as 'modelbridge_anthropic/claude-opus-4-8' to use a configured gateway key.",
-            "Profiles are descriptive metadata for preflight and future scheduling; they do not automatically select models yet.",
+            "Profiles are descriptive metadata for preflight and suggest_panel; they never auto-call models.",
         ],
+    }
+
+
+_PANEL_STRATEGIES = {
+    "balanced": {
+        "quality_score": 0.35,
+        "cost_score": 0.25,
+        "speed_score": 0.20,
+        "structured_output_score": 0.15,
+        "context_score": 0.05,
+    },
+    "cheap_fast": {
+        "cost_score": 0.45,
+        "speed_score": 0.35,
+        "structured_output_score": 0.15,
+        "quality_score": 0.05,
+    },
+    "best_reasoning": {
+        "quality_score": 0.60,
+        "structured_output_score": 0.20,
+        "context_score": 0.10,
+        "speed_score": 0.05,
+        "cost_score": 0.05,
+    },
+    "sleep": {
+        "cost_score": 0.40,
+        "speed_score": 0.30,
+        "quality_score": 0.15,
+        "structured_output_score": 0.15,
+    },
+    "awake": {
+        "quality_score": 0.65,
+        "structured_output_score": 0.15,
+        "context_score": 0.10,
+        "speed_score": 0.05,
+        "cost_score": 0.05,
+    },
+    "structured_output": {
+        "structured_output_score": 0.45,
+        "quality_score": 0.25,
+        "cost_score": 0.15,
+        "speed_score": 0.15,
+    },
+}
+
+
+def _official_key_status(route: dict) -> str:
+    hint = route.get("credential_hint") or ""
+    if hint.endswith("_API_KEY"):
+        return "set" if os.environ.get(str(hint)) else "missing"
+    return "unknown"
+
+
+def _route_key_status(route: dict) -> str:
+    if route.get("route_type") == "configured_endpoint":
+        return str(route.get("api_key_status") or "missing")
+    return _official_key_status(route)
+
+
+def _route_key_available(route: dict) -> bool:
+    return _route_key_status(route) in ("set", "plaintext_configured", "unknown")
+
+
+def _task_tag_boost(profile: dict, task: str) -> tuple[float, list[str]]:
+    text = str(task or "").casefold()
+    if not text:
+        return 0.0, []
+    tags = set(_as_profile_list(profile.get("tags")) + _as_profile_list(profile.get("capabilities")))
+    matched: list[str] = []
+    checks = {
+        "architecture": ["architecture", "design", "\u67b6\u6784", "\u8bbe\u8ba1"],
+        "coding": ["code", "coding", "\u4ee3\u7801", "\u5b9e\u73b0"],
+        "review": ["review", "audit", "\u5ba1\u67e5", "\u8bc4\u5ba1"],
+        "reasoning": ["reason", "planning", "plan", "\u63a8\u7406", "\u89c4\u5212"],
+        "debugging": ["debug", "bug", "failure", "\u8c03\u8bd5", "\u62a5\u9519"],
+        "performance": ["performance", "latency", "cost", "\u6027\u80fd", "\u5ef6\u8fdf", "\u6210\u672c"],
+    }
+    for tag, needles in checks.items():
+        if tag in tags and any(needle in text for needle in needles):
+            matched.append(tag)
+    return min(0.12, 0.03 * len(matched)), matched
+
+
+def _score_route(route: dict, strategy: str, task: str = "") -> dict:
+    profile = route.get("profile") or {}
+    weights = _PANEL_STRATEGIES.get(strategy, _PANEL_STRATEGIES["balanced"])
+    components: dict[str, float] = {}
+    score = 0.0
+    for key, weight in weights.items():
+        value = profile.get(key)
+        try:
+            numeric = float(value)
+        except Exception:  # noqa: BLE001
+            numeric = 0.0
+        component = round(numeric * weight, 4)
+        components[key] = component
+        score += component
+
+    bonuses: dict[str, float | list[str]] = {}
+    role = str(profile.get("activation_role") or "").casefold()
+    tier = str(profile.get("tier") or "").casefold()
+    tags = set(_as_profile_list(profile.get("tags")))
+    if strategy == "sleep" and role == "sleep":
+        score += 0.15
+        bonuses["activation_role"] = 0.15
+    if strategy == "awake" and (role == "awake" or tier == "flagship"):
+        score += 0.15
+        bonuses["activation_role_or_tier"] = 0.15
+    if strategy == "best_reasoning" and ("deep_reasoning" in tags or tier == "flagship"):
+        score += 0.08
+        bonuses["reasoning_tag_or_tier"] = 0.08
+
+    boost, matched_tags = _task_tag_boost(profile, task)
+    if boost:
+        score += boost
+        bonuses["task_match"] = round(boost, 4)
+        bonuses["matched_tags"] = matched_tags
+
+    return {
+        "score": round(max(0.0, min(1.0, score)), 4),
+        "score_breakdown": components,
+        "bonuses": bonuses,
+    }
+
+
+def _candidate_panel(defaults: dict) -> tuple[list, str]:
+    endpoints_cfg = defaults.get("endpoints") or {}
+    has_endpoint_models = any(_endpoint_model_ids(ep) for ep in endpoints_cfg.values())
+    if has_endpoint_models:
+        return ["endpoints"], "configured_endpoints"
+    return list(defaults.get("panel") or []), "panel"
+
+
+def _suggest_panel(
+    *,
+    defaults: dict,
+    strategy: str = "balanced",
+    task: str = "",
+    panel: list[str] | None = None,
+    max_models: int = 2,
+    require_available_key: bool = True,
+) -> dict:
+    if max_models <= 0:
+        raise ValueError("max_models must be greater than 0")
+    effective_strategy = strategy if strategy in _PANEL_STRATEGIES else "balanced"
+    raw_panel, source = (list(panel), "explicit") if panel is not None else _candidate_panel(defaults)
+    route_info = _describe_model_routes(raw_panel, defaults, panel_source=source)
+
+    candidates: list[dict] = []
+    for route in route_info["resolved_panel"]:
+        key_status = _route_key_status(route)
+        scoring = _score_route(route, effective_strategy, task)
+        candidate = {
+            **route,
+            "key_status": key_status,
+            "selectable": (not require_available_key) or _route_key_available(route),
+            **scoring,
+        }
+        if not candidate["selectable"]:
+            candidate["excluded_reason"] = "credential_missing"
+        candidates.append(candidate)
+
+    ranked = sorted(candidates, key=lambda item: (-item["selectable"], -item["score"], item["label"]))
+    selected = [item for item in ranked if item["selectable"]][:max_models]
+    return {
+        "strategy": effective_strategy,
+        "requested_strategy": strategy,
+        "task": task,
+        "selected_panel": [item["label"] for item in selected],
+        "selected": selected,
+        "candidates": ranked,
+        "warnings": route_info["warnings"],
+        "ambiguous_models": route_info["ambiguous_models"],
+        "trace": {
+            "candidate_source": source,
+            "max_models": max_models,
+            "require_available_key": require_available_key,
+            "models_called": False,
+            "auto_execute": False,
+            "available_strategies": sorted(_PANEL_STRATEGIES),
+            "no_selection_reason": "" if selected else "no_selectable_models",
+        },
     }
 
 
@@ -1255,6 +1465,32 @@ def list_model_routes(panel: list[str] | None = None) -> dict:
     defaults = {key: value["value"] for key, value in all_defaults.items()}
     panel_source = "explicit" if panel is not None else all_defaults.get("panel", {}).get("source", "unknown")
     return _describe_model_routes(panel, defaults, panel_source=panel_source)
+
+
+@mcp.tool()
+def suggest_panel(
+    strategy: str = "balanced",
+    task: str = "",
+    panel: list[str] | None = None,
+    max_models: int = 2,
+    require_available_key: bool = True,
+) -> dict:
+    """Recommend a model panel from route/profile metadata without calling models.
+
+    Strategies include balanced, cheap_fast, best_reasoning, sleep, awake, and
+    structured_output. The returned selected_panel can be copied into tools
+    such as plan_task or consult_problem when the user chooses to spend tokens.
+    """
+    all_defaults = _defaults_mod.get_all()
+    defaults = {key: value["value"] for key, value in all_defaults.items()}
+    return _suggest_panel(
+        defaults=defaults,
+        strategy=strategy,
+        task=task,
+        panel=panel,
+        max_models=max_models,
+        require_available_key=require_available_key,
+    )
 
 
 @mcp.tool()
