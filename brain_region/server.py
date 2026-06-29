@@ -870,6 +870,7 @@ async def review_document(
         document_content=content, document_files=files, panel=panel_used,
         dimensions=dims_used, adapter=ad.name, project_version=version,
         retrieved_cases_ids=retrieved_ids, extra_context=extra_context,
+        effort=dd.get("effort"), max_cost_usd=dd.get("max_cost_usd"),
     )
     cached = reviews_db.lookup(phash)
     effective_output_format = dd["output_format"]

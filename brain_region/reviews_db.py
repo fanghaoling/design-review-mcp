@@ -138,7 +138,11 @@ def compute_hash(
     project_version: dict[str, str],
     retrieved_cases_ids: list[str],
     extra_context: str,
+    effort: str | None = None,
+    max_cost_usd: float | None = None,
 ) -> str:
+    # effort / max_cost_usd 必须进 hash：改这两个会改变实际产出（effort 影响思考强度；
+    # max_cost_usd 影响预算裁剪 → 可能裁掉模型 → 结果不同）。否则改参重跑会静默命中旧缓存（ISS-002）。
     parts = [
         document_content or "",
         json.dumps(document_files or {}, sort_keys=True, ensure_ascii=False),
@@ -148,6 +152,8 @@ def compute_hash(
         json.dumps(project_version or {}, sort_keys=True, ensure_ascii=False),
         json.dumps(sorted(retrieved_cases_ids or []), ensure_ascii=False),
         extra_context or "",
+        str(effort),
+        str(max_cost_usd),
     ]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 

@@ -24,7 +24,14 @@ def render(report: ReviewReport) -> str:
         lines += [f"- {m['model']}: {m['error']}" for m in report.failed_models]
         lines.append("")
 
-    lines.append("## ✅ Consensus（全模型同意）")
+    ps = report.panel_status or {}
+    if ps.get("complete", True):
+        lines.append("## ✅ Consensus（全模型同意）")
+    else:
+        lines.append(
+            f"## ✅ Consensus（⚠️ panel 不完整 {ps.get('ran')}/{ps.get('requested')}，"
+            "未做交叉验证）"
+        )
     lines += [_finding_md(c) for c in report.consensus] or ["_(无)_"]
     lines.append("")
 

@@ -52,7 +52,7 @@ class LiteLLMBackend:
     def __init__(
         self,
         *,
-        num_retries: int = 2,
+        num_retries: int = 4,
         timeout: float = 60.0,
         response_format: dict | None = None,
         endpoint_registry: dict | None = None,

@@ -73,6 +73,7 @@ class ReviewReport:
     risk: dict = field(default_factory=dict)  # {overall_level, top_risks}；v3 细化
     privacy: dict = field(default_factory=dict)  # v1.7 {policy, coverage, missing_topics, trusted}
     context_compression: dict = field(default_factory=dict)  # v1.8 {dim: {mode, original_chars, compressed_chars, ratio}}
+    panel_status: dict = field(default_factory=dict)  # {requested, ran, complete}；panel 不完整（裁剪/失败）→ complete=False（ISS-001）
 
     def to_dict(self) -> dict:
         """序列化为 JSON 友好的 dict（JSONRenderer / MCP 工具返回用）。"""
@@ -98,4 +99,5 @@ class ReviewReport:
             "risk": dict(self.risk),
             "privacy": dict(self.privacy),
             "context_compression": dict(self.context_compression),
+            "panel_status": dict(self.panel_status),
         }

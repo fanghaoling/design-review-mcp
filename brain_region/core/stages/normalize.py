@@ -69,7 +69,15 @@ def _merge_case_ref_group(cfs: list[CanonicalFinding], case_title: str, case_cat
     flagged_by 取并集；source_findings 全部保留供溯源。
     """
     rep = sorted(cfs, key=lambda c: (_SEV.get(c.severity, 9), -len(c.source_findings)))[0]
-    title = f"[{rep.case_ref}] {case_title}" if case_title else rep.canonical_title
+    # 只在强信号（多模型，或多条 canonical 指向同一 case）时才用案例标题作 canonical_title。
+    # 单条/单模型的 case_ref 可能来自检索误命中（如游戏案例 GP-ENEMY-DORMANT 命中"dormant"词面），
+    # 此时用案例标题会把无关标题顶到 finding 上（ISS-004）→ 退回 LLM 生成的 rep 标题（反映真实内容）。
+    distinct_models = {f.model for c in cfs for f in (c.source_findings or [])}
+    strong = len(distinct_models) >= 2 or len(cfs) >= 2
+    if case_title and strong:
+        title = f"[{rep.case_ref}] {case_title}"
+    else:
+        title = rep.canonical_title
     return CanonicalFinding(
         canonical_title=title,
         dimension=case_cat or rep.dimension,

@@ -36,12 +36,16 @@ class ConsensusStage:
         majority = []
         individual_map: dict[str, list[Finding]] = defaultdict(list)
 
+        # consensus/majority 需要至少 2 个成功模型才有"多模型同意"语义。
+        # 预算裁剪/失败只剩 1 个成功模型时，不能把它标成 consensus（ISS-001）。
+        multi = num_models >= 2
+
         for cf in ctx.canonical_findings:
             count = len(cf.flagged_by)
-            if count == num_models and count >= threshold:
+            if multi and count == num_models and count >= threshold:
                 cf.bucket = "consensus"
                 consensus.append(cf)
-            elif count >= 2:
+            elif multi and count >= 2:
                 cf.bucket = "majority"
                 majority.append(cf)
             else:

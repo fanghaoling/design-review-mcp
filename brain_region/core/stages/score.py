@@ -103,6 +103,9 @@ class ScoreStage:
             overall = "low"
 
         ind_count = sum(len(v) for v in ctx.individual.values())
+        # panel 完整性（ISS-001）：成功模型 < 请求 panel → 裁剪/失败致 panel 不完整
+        panel_ran = len({it["model"] for it in ctx.responses if it["response"].ok})
+        panel_requested = len(ctx.panel)
         report = ReviewReport(
             document_type=ctx.document.type,
             adapter=ctx.adapter.name,
@@ -122,6 +125,11 @@ class ScoreStage:
                 "exhausted": ctx.budget_exhausted,
             },
             usage={"total_tokens": total_tokens, "cost_usd": round(cost, 6)},
+            panel_status={
+                "requested": panel_requested,
+                "ran": panel_ran,
+                "complete": panel_requested > 0 and panel_ran >= panel_requested,
+            },
             summary=f"consensus={len(ctx.consensus)} majority={len(ctx.majority)} "
             f"individual={ind_count} failed={len(failed)}"
             + (f" budget_trimmed={ctx.jobs_run}/{ctx.jobs_total}" if ctx.budget_exhausted else ""),
