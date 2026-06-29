@@ -15,7 +15,7 @@ import pytest
 
 from brain_region import reviews_db
 from brain_region.providers.litellm import LiteLLMBackend
-from brain_region.server import _normalize_one, _normalize_panel, _resolve_endpoints
+from brain_region.server import _describe_model_routes, _normalize_one, _normalize_panel, _resolve_endpoints
 
 
 # ===== _resolve_endpoints =====
@@ -171,6 +171,95 @@ def test_normalize_panel_wildcard_mix_with_official():
     assert [e["label"] for e in entries] == ["gpt-4o", "zhipu/glm-5.2"]
     assert entries[0]["endpoint_id"] is None      # gpt-4o 官方
     assert entries[1]["endpoint_id"] == "zhipu"   # 通配展开
+
+
+def test_describe_model_routes_distinguishes_bare_and_endpoint_refs(monkeypatch):
+    monkeypatch.setenv("MODEBRIDGE_API_KEY", "secret")
+    defaults = {
+        "panel": ["claude-opus-4-8", "modelbridge_anthropic/claude-opus-4-8"],
+        "endpoints": {
+            "modelbridge_anthropic": {
+                "provider": "anthropic",
+                "base_url": "https://www.modelbridge.cloud",
+                "api_key_env": "MODEBRIDGE_API_KEY",
+                "models": ["claude-opus-4-8"],
+            }
+        },
+    }
+
+    routes = _describe_model_routes(None, defaults, panel_source="test")
+    bare, endpoint = routes["resolved_panel"]
+    assert bare["route_type"] == "official_litellm"
+    assert bare["credential_hint"] == "ANTHROPIC_API_KEY"
+    assert endpoint["route_type"] == "configured_endpoint"
+    assert endpoint["endpoint_id"] == "modelbridge_anthropic"
+    assert endpoint["api_key_env"] == "MODEBRIDGE_API_KEY"
+    assert endpoint["api_key_status"] == "set"
+    assert routes["ambiguous_models"] == [
+        {
+            "model": "claude-opus-4-8",
+            "endpoint_refs": ["modelbridge_anthropic/claude-opus-4-8"],
+            "official_ref": "claude-opus-4-8",
+            "reasons": ["bare_model_string_also_used"],
+        }
+    ]
+
+
+def test_describe_model_routes_reports_same_model_on_multiple_endpoints(monkeypatch):
+    monkeypatch.delenv("MODEBRIDGE_API_KEY", raising=False)
+    defaults = {
+        "panel": ["endpoints"],
+        "endpoints": {
+            "relay_a": {
+                "provider": "openai",
+                "base_url": "https://a.example/v1",
+                "api_key_env": "MODEBRIDGE_API_KEY",
+                "models": ["gpt-5.5"],
+            },
+            "relay_b": {
+                "provider": "openai",
+                "base_url": "https://b.example/v1",
+                "api_key_env": "MODEBRIDGE_API_KEY",
+                "models": ["gpt-5.5"],
+            },
+        },
+    }
+
+    routes = _describe_model_routes(None, defaults, panel_source="test")
+    assert routes["available_model_refs"] == ["relay_a/gpt-5.5", "relay_b/gpt-5.5"]
+    assert routes["endpoints"][0]["api_key_status"] == "missing"
+    assert routes["ambiguous_models"][0]["reasons"] == ["declared_under_multiple_endpoints"]
+
+
+def test_server_list_model_routes_tool(monkeypatch):
+    from brain_region import server
+
+    monkeypatch.setattr(
+        server._defaults_mod,
+        "get_all",
+        lambda: {
+            "panel": {"value": ["relay/m"], "source": "test_config"},
+            "endpoints": {
+                "value": {
+                    "relay": {
+                        "provider": "openai",
+                        "base_url": "https://relay.example/v1",
+                        "api_key_env": "RELAY_KEY",
+                        "models": ["m"],
+                    }
+                },
+                "source": "test_config",
+            },
+        },
+    )
+
+    configured = server.list_model_routes()
+    assert configured["panel_source"] == "test_config"
+    assert configured["resolved_panel"][0]["endpoint_id"] == "relay"
+
+    explicit = server.list_model_routes(panel=["m"])
+    assert explicit["panel_source"] == "explicit"
+    assert explicit["resolved_panel"][0]["route_type"] == "official_litellm"
 
 
 # ===== LiteLLMBackend：endpoint_id → litellm.acompletion 参数 =====

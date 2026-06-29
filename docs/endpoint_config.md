@@ -38,10 +38,10 @@ For Anthropic-compatible endpoints, set `base_url` to the site root. LiteLLM app
       "provider": "anthropic",
       "base_url": "https://www.modelbridge.cloud",
       "api_key_env": "MODEBRIDGE_API_KEY",
-      "models": ["claude-haiku-4-5"]
+      "models": ["claude-haiku-4-5", "claude-opus-4-8"]
     }
   },
-  "panel": ["modelbridge_anthropic/claude-haiku-4-5"]
+  "panel": ["modelbridge_anthropic/claude-opus-4-8"]
 }
 ```
 
@@ -54,8 +54,27 @@ For Anthropic-compatible endpoints, set `base_url` to the site root. LiteLLM app
 - `"endpoint_id/model"`: run one model through one endpoint.
 - `"gpt-4o"` or other LiteLLM strings: run directly through the official provider environment variables.
 
+Bare model names and endpoint references are different routes. `"claude-opus-4-8"` is treated as an official LiteLLM
+Anthropic model and usually needs `ANTHROPIC_API_KEY`; `"modelbridge_anthropic/claude-opus-4-8"` routes through the
+configured `modelbridge_anthropic` endpoint and uses its `MODEBRIDGE_API_KEY`. If the same model name exists under a
+gateway, include the endpoint prefix when you want the gateway route.
+
+Use `list_model_routes` to inspect how the current config will resolve a panel:
+
+```python
+list_model_routes(panel=[
+    "claude-opus-4-8",
+    "modelbridge_anthropic/claude-opus-4-8",
+])
+```
+
+The tool only returns route metadata, endpoint declarations, model lists, and whether a key is present. It does not call
+models or return API key values.
+
 ## Common Failures
 
 - `Empty or invalid response` with an HTML page usually means an OpenAI-compatible `base_url` is missing `/v1`.
 - `Invalid URL (POST /v1/v1/messages)` means an Anthropic-compatible `base_url` includes `/v1`; use the site root instead.
 - `No permission to access auto group` comes from the gateway account/key permissions. The request reached the gateway, but the key cannot access that model/group.
+- Missing `ANTHROPIC_API_KEY` often means a bare `claude-*` model name was used instead of a `modelbridge_anthropic/...`
+  endpoint reference.

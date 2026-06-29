@@ -220,6 +220,127 @@ def _normalize_one(spec, endpoint_ids: set, endpoints_cfg: dict | None = None) -
     return _normalize_panel([spec], endpoint_ids, endpoints_cfg)[0]
 
 
+def _official_credential_hint(model: str) -> str:
+    """Best-effort hint for bare LiteLLM model strings."""
+    m = str(model or "").lower()
+    if m.startswith("claude-") or m.startswith("anthropic/"):
+        return "ANTHROPIC_API_KEY"
+    if m.startswith(("gpt-", "o1", "o3", "o4", "openai/")):
+        return "OPENAI_API_KEY"
+    if m.startswith("zai/"):
+        return "ZAI_API_KEY"
+    if m.startswith("deepseek/"):
+        return "DEEPSEEK_API_KEY"
+    if m.startswith("gemini/"):
+        return "GEMINI_API_KEY"
+    return "provider-specific environment variable"
+
+
+def _endpoint_key_status(ep: dict) -> str:
+    env_name = ep.get("api_key_env")
+    if env_name:
+        return "set" if os.environ.get(str(env_name)) else "missing"
+    if ep.get("api_key"):
+        return "plaintext_configured"
+    return "missing"
+
+
+def _configured_endpoint_models(endpoints_cfg: dict) -> list[dict]:
+    endpoints: list[dict] = []
+    for eid, ep in sorted((endpoints_cfg or {}).items()):
+        models = [str(model) for model in (ep.get("models") or [])]
+        endpoints.append(
+            {
+                "id": eid,
+                "provider": ep.get("provider"),
+                "base_url": ep.get("base_url"),
+                "api_key_env": ep.get("api_key_env") or "",
+                "api_key_status": _endpoint_key_status(ep),
+                "models": models,
+                "model_refs": [f"{eid}/{model}" for model in models],
+            }
+        )
+    return endpoints
+
+
+def _describe_model_routes(panel: list | None, defaults: dict, *, panel_source: str = "explicit") -> dict:
+    """Describe how model specs resolve without touching credentials or calling models."""
+    endpoints_cfg = defaults.get("endpoints") or {}
+    raw_panel = list(panel if panel is not None else defaults.get("panel") or [])
+    endpoint_ids = set(endpoints_cfg.keys())
+    resolved = _normalize_panel(raw_panel, endpoint_ids, endpoints_cfg)
+    endpoints = _configured_endpoint_models(endpoints_cfg)
+
+    endpoint_model_refs: dict[str, list[str]] = {}
+    for endpoint in endpoints:
+        for model in endpoint["models"]:
+            endpoint_model_refs.setdefault(model, []).append(f"{endpoint['id']}/{model}")
+
+    routes: list[dict] = []
+    bare_models = set()
+    for entry in resolved:
+        endpoint_id = entry.get("endpoint_id")
+        model = entry["model"]
+        if endpoint_id is None:
+            bare_models.add(model)
+            routes.append(
+                {
+                    "label": entry["label"],
+                    "model": model,
+                    "endpoint_id": None,
+                    "route_type": "official_litellm",
+                    "credential_hint": _official_credential_hint(model),
+                    "note": "Bare model strings bypass configured endpoints. Use endpoint_id/model to route through a gateway.",
+                }
+            )
+            continue
+        ep = endpoints_cfg.get(endpoint_id) or {}
+        routes.append(
+            {
+                "label": entry["label"],
+                "model": model,
+                "endpoint_id": endpoint_id,
+                "route_type": "configured_endpoint",
+                "provider": ep.get("provider"),
+                "base_url": ep.get("base_url"),
+                "api_key_env": ep.get("api_key_env") or "",
+                "api_key_status": _endpoint_key_status(ep),
+            }
+        )
+
+    ambiguous_models: list[dict] = []
+    for model, refs in sorted(endpoint_model_refs.items()):
+        reasons: list[str] = []
+        if len(refs) > 1:
+            reasons.append("declared_under_multiple_endpoints")
+        if model in bare_models:
+            reasons.append("bare_model_string_also_used")
+        if reasons:
+            ambiguous_models.append(
+                {
+                    "model": model,
+                    "endpoint_refs": refs,
+                    "official_ref": model if model in bare_models else "",
+                    "reasons": reasons,
+                }
+            )
+
+    return {
+        "panel_source": panel_source,
+        "panel": raw_panel,
+        "resolved_panel": routes,
+        "endpoints": endpoints,
+        "available_model_refs": sorted(
+            ref for refs in endpoint_model_refs.values() for ref in refs
+        ),
+        "ambiguous_models": ambiguous_models,
+        "notes": [
+            "A bare model string such as 'claude-opus-4-8' uses the official LiteLLM provider route.",
+            "Use 'endpoint_id/model' such as 'modelbridge_anthropic/claude-opus-4-8' to use a configured gateway key.",
+        ],
+    }
+
+
 def _build_engine(adapter, dd: dict) -> ReviewEngine:
     registry = _resolve_endpoints(dd.get("endpoints") or {})
     endpoint_ids = set(registry.keys())
@@ -828,6 +949,21 @@ def list_knowledge(adapter: str = "auto") -> dict:
 def list_defaults() -> dict:
     """列出三层默认值及来源（builtin/config/env）。"""
     return _defaults_mod.get_all()
+
+
+@mcp.tool()
+def list_model_routes(panel: list[str] | None = None) -> dict:
+    """Show how model specs resolve to official providers or configured endpoints.
+
+    This is a diagnostic tool only: it does not call models and never returns
+    API key values. It helps distinguish bare model strings like
+    ``claude-opus-4-8`` from endpoint refs like
+    ``modelbridge_anthropic/claude-opus-4-8``.
+    """
+    all_defaults = _defaults_mod.get_all()
+    defaults = {key: value["value"] for key, value in all_defaults.items()}
+    panel_source = "explicit" if panel is not None else all_defaults.get("panel", {}).get("source", "unknown")
+    return _describe_model_routes(panel, defaults, panel_source=panel_source)
 
 
 @mcp.tool()

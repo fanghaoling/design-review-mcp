@@ -28,6 +28,7 @@ without changing the core pipeline.
 - Generate executable task plans with `plan_task`, then review the plan before implementation.
 - Route a goal/problem to likely Brain Regions with `route_regions` as a local, deterministic precursor to context scheduling.
 - Suggest explicit manual next steps with `suggest_workflow` without auto-calling tools or models.
+- Inspect model routing with `list_model_routes` so bare model names and endpoint-backed models are not confused.
 - Merge defaults from builtin values, global config, project config, environment variables, and explicit call arguments.
 
 ## Architecture
@@ -358,10 +359,10 @@ proxies, or internal model bridges. Use one endpoint per wire protocol.
       "provider": "anthropic",
       "base_url": "https://www.modelbridge.cloud",
       "api_key_env": "MODEBRIDGE_API_KEY",
-      "models": ["claude-haiku-4-5"]
+      "models": ["claude-haiku-4-5", "claude-opus-4-8"]
     }
   },
-  "panel": ["modelbridge_openai/gpt-5.5", "modelbridge_anthropic/claude-haiku-4-5"]
+  "panel": ["modelbridge_openai/gpt-5.5", "modelbridge_anthropic/claude-opus-4-8"]
 }
 ```
 
@@ -371,6 +372,10 @@ Panel shortcuts:
 - `"endpoint_id"` expands every model under one endpoint.
 - `"endpoint_id/model"` runs one model through one endpoint.
 - Native LiteLLM strings such as `"gpt-4o"` or `"deepseek/deepseek-chat"` bypass endpoint config and use provider env vars.
+
+For example, `"claude-opus-4-8"` is a bare official-provider route and usually needs `ANTHROPIC_API_KEY`, while
+`"modelbridge_anthropic/claude-opus-4-8"` uses the configured gateway and its `MODEBRIDGE_API_KEY`. Run
+`list_model_routes` when you want to inspect the exact route before spending tokens.
 
 ## Cost And Effort Controls
 

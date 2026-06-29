@@ -144,6 +144,22 @@ config 里**每个** endpoint 的 `api_key_env` 都会被检查。**任一** end
 
 同一个 glm-5.2，两种路径扣不同账户的钱。想省钱要分清走哪条——`zai/` 前缀的 str 永远走官方，要走中转站必须用 endpoint。
 
+同样，`"claude-opus-4-8"` 和 `"modelbridge_anthropic/claude-opus-4-8"` 也不是同一个路由：
+
+- `"claude-opus-4-8"`：裸 LiteLLM 模型名，走官方 Anthropic provider，通常需要 `ANTHROPIC_API_KEY`。
+- `"modelbridge_anthropic/claude-opus-4-8"`：走 `endpoints.modelbridge_anthropic`，使用该 endpoint 声明的 `MODEBRIDGE_API_KEY`。
+
+如果你说“用 ModelBridge 里的 Claude”，panel 里应写 endpoint 前缀。可以先调用：
+
+```python
+list_model_routes(panel=[
+    "claude-opus-4-8",
+    "modelbridge_anthropic/claude-opus-4-8",
+])
+```
+
+它会显示每个模型实际走 official provider 还是 configured endpoint，并标出 key 是否存在，但不会返回 key 明文。
+
 ### #5 中转站 provider 选 openai 还是 anthropic？
 
 看中转站文档提供哪种兼容协议：
