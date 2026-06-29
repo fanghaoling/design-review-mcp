@@ -1,0 +1,75 @@
+# judge 校准 gold —— 细微差异对（subtle）。
+# 与 review_calibration.yaml（stark 鲜明对比）不同：这里 good/bad 都是【合理 review】，只在
+# 一个细微维度上 good 更好。用来测 judge 的【分辨率极限】——能否分辨"都还行但一个好一点"。
+# 这是 eval A/B（off/on/garbage 差异微妙）真正需要的能力。
+# subtle_dim: completeness | evidence_precision | actionability | severity_accuracy | edge_case | fix_correctness
+
+# ===== completeness：bad 少抓一个 =====
+- id: sub-001
+  failure_mode: completeness
+  task: |
+    审查缓存失效：读时不过期检查，且多个请求同时 miss 会一起回源。
+  good:
+    - {severity: medium, title: "stale-read（读不过期）", evidence: "cache.py:12 get() 无 TTL 检查", suggestion: "读时校验 TTL 或写时打时间戳。"}
+    - {severity: medium, title: "thundering-herd", evidence: "cache.py:20 miss 时无锁，并发同时回源", suggestion: "miss 时单飞（lock + double-check）。"}
+  bad:
+    - {severity: medium, title: "stale-read（读不过期）", evidence: "cache.py:12 get() 无 TTL 检查", suggestion: "读时校验 TTL 或写时打时间戳。"}
+  note: bad 合理但漏了 thundering-herd。
+
+# ===== evidence_precision：bad 方向对但证据模糊 =====
+- id: sub-002
+  failure_mode: evidence_precision
+  task: |
+    审查：长跑服务疑似内存泄漏，缓存条目只增不删。
+  good:
+    - {severity: medium, title: "缓存无淘汰致泄漏", evidence: "cache.py:30 put() 只写不删，无 LRU/TTL；进程 RSS 随时间单调上升（见监控链接）", suggestion: "加 LRU 或 TTL 上限。"}
+  bad:
+    - {severity: medium, title: "可能有内存泄漏", evidence: "缓存附近感觉像在涨", suggestion: "加 LRU 或 TTL 上限。"}
+  note: bad 方向对、建议同，但证据模糊、无具体行/数据。
+
+# ===== actionability：bad 建议空泛 =====
+- id: sub-003
+  failure_mode: actionability
+  task: |
+    审查：异常被空 catch 吞掉。
+  good:
+    - {severity: high, title: "异常被吞", evidence: "handler.py:15 except: pass", suggestion: "记结构化日志 + 返回 500 + 对可重试错误做限流重试。"}
+  bad:
+    - {severity: high, title: "异常被吞", evidence: "handler.py:15 except: pass", suggestion: "要妥善处理异常，不能直接吞。"}
+  note: bad 找对了，但建议空泛（"妥善处理"不可执行）。
+
+# ===== severity_accuracy：bad 低估严重度（没漏，但评错） =====
+- id: sub-004
+  failure_mode: severity_accuracy
+  task: |
+    审查搜索接口：用户输入拼进 LIKE（注入），且结果字段命名不规范。
+  good:
+    - {severity: high, title: "SQL 注入", evidence: "search.py:12 f\"LIKE '%{q}'\"", suggestion: "参数化绑定。"}
+    - {severity: low, title: "字段命名", evidence: "result.q", suggestion: "result.query 更清晰。"}
+  bad:
+    - {severity: medium, title: "SQL 注入", evidence: "search.py:12 f\"LIKE '%{q}'\"", suggestion: "参数化绑定。"}
+    - {severity: medium, title: "字段命名", evidence: "result.q", suggestion: "result.query 更清晰。"}
+  note: bad 没漏，但把注入评为 medium（低估），且把命名也评 medium（高估）。
+
+# ===== edge_case：bad 漏一个边界 =====
+- id: sub-005
+  failure_mode: edge_case
+  task: |
+    审查分页：page*size 偏移，size 上限未限。
+  good:
+    - {severity: medium, title: "size 无上限", evidence: "list.py:8 size=req.size", suggestion: "size 钳到 <=100。"}
+    - {severity: low, title: "空结果/越界边界", evidence: "page 超过总页数时未返空", suggestion: "超界返空列表 + 404 语义。"}
+  bad:
+    - {severity: medium, title: "size 无上限", evidence: "list.py:8 size=req.size", suggestion: "size 钳到 <=100。"}
+  note: bad 合理但漏了空结果/越界边界。
+
+# ===== fix_correctness：bad 修复方向对但有缺陷 =====
+- id: sub-006
+  failure_mode: fix_correctness
+  task: |
+    审查并发扣款：先查余额再扣，两步无锁。
+  good:
+    - {severity: high, title: "TOCTOU 竞态", evidence: "pay.py:20 bal=get(); :22 if bal>=x: deduct()", suggestion: "原子 update where balance>=x，或行锁+事务。"}
+  bad:
+    - {severity: high, title: "TOCTOU 竞态", evidence: "pay.py:20 bal=get(); :22 if bal>=x: deduct()", suggestion: "查完加个短 sleep 再重试一次。"}
+  note: bad 找对了竞态，但"sleep 重试"是有缺陷的修复（仍可能竞态、且降吞吐）。
