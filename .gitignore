@@ -21,6 +21,8 @@ Assets/
 # Local one-off verification scripts
 scripts/verify_*
 
-# Local long-term planning notes (not uploaded)
+# Local planning / issue / spec notes (not uploaded)
 docs/ai_collaboration_roadmap.zh-CN.md
 docs/roadmap_backups/
+docs/issue_backlog.zh-CN.md
+docs/eval_harness.zh-CN.md
