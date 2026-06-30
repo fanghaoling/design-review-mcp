@@ -45,6 +45,10 @@ def test_cost_ratio_aggregate_direction():
     # useful=0 → None
     assert cost_ratio_stat([_row(1, 0, 1, 1)], "default", "routed") is None
     assert cost_ratio_stat([_row(1, 1, 1, 0)], "default", "routed") is None
+    # cost=0（litellm 无价格表的 endpoint 模型，如 glm/deepseek-v4-flash）→ 不除零，返回 None
+    assert cost_ratio_stat([_row(0, 2, 0, 4)], "default", "routed") is None   # 两臂 cost=0
+    assert cost_ratio_stat([_row(0, 2, 1, 4)], "default", "routed") is None   # control cost=0（分母→曾 ZeroDivisionError）
+    assert cost_ratio_stat([_row(1, 2, 0, 4)], "default", "routed") is None   # treatment cost=0
 
 
 def test_useful_delta_and_missed():

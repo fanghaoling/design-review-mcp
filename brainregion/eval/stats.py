@@ -126,12 +126,15 @@ def bootstrap_statistic(
 
 def cost_ratio_stat(rows: list, control: str, treatment: str) -> float | None:
     """(Σtreatment_cost/Σtreatment_useful) / (Σcontrol_cost/Σcontrol_useful)。<1 = treatment 更便宜。
-    任一 Σuseful=0 → None（degenerate）。吸收 GPT Blocker 1：聚合层算，非 per-task ratio。"""
+    任一 Σuseful=0 或 Σcost=0 → None（degenerate）。cost=0 多见于 litellm 无价格表的模型
+    （endpoint 中转的 glm/gpt-5.4-mini/deepseek-v4-flash 等），此时 cost ratio 无意义——
+    分母（control cost/useful）若为 0 会除零，故任一 cost=0 即返回 None（诚实，gate 走 INCONCLUSIVE）。
+    吸收 GPT Blocker 1：聚合层算，非 per-task ratio。"""
     c_cost = sum(r[control]["cost"] for r in rows)
     c_useful = sum(r[control]["useful"] for r in rows)
     t_cost = sum(r[treatment]["cost"] for r in rows)
     t_useful = sum(r[treatment]["useful"] for r in rows)
-    if c_useful == 0 or t_useful == 0:
+    if c_useful == 0 or t_useful == 0 or c_cost == 0 or t_cost == 0:
         return None
     return (t_cost / t_useful) / (c_cost / c_useful)
 
