@@ -229,7 +229,7 @@ wheels = [
 ]
 
 [[package]]
-name = "brain-region-mcp"
+name = "brainregion"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
