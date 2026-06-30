@@ -530,11 +530,13 @@ def _pctl(values: list[float], p: float) -> float:
     return s[k]
 
 
-def _calibration_ok(judge_entries: list[dict], rubric_hash: str, prompt_hash: str, gold_version: str) -> bool:
-    """所有 judge 都有匹配的 pass 校准 artifact 吗？（outcome gate 前置，吸收 I6/Blocker 3）"""
+def _calibration_ok(judge_entries: list[dict], rubric_hash: str, prompt_hash: str, gold_version: str = "") -> bool:
+    """所有 judge 都有匹配的 pass 校准 artifact 吗？（outcome gate 前置，吸收 I6/Blocker 3）
+
+    按 judge+rubric+prompt 取最新（gold_version 不强制匹配——outcome 不知 gold 版本，仅追溯用）。"""
     for je in judge_entries or []:
         rec = store.lookup_calibration(je.get("label", ""), je.get("model", ""),
-                                       rubric_hash, prompt_hash, gold_version)
+                                       rubric_hash, prompt_hash, gold_version=None)
         if not rec or not rec.get("passed"):
             return False
     return True

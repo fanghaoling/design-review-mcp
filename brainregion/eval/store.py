@@ -128,14 +128,25 @@ def record_calibration(rec, summary: dict) -> None:
         logger.warning("eval record_calibration 失败: %s", e)
 
 
-def lookup_calibration(judge_id, judge_model, rubric_hash, prompt_hash, gold_version="") -> dict | None:
-    """查最新匹配的校准 artifact（outcome gate 出判定前强制验证）。无 → None（→ CALIBRATION_REQUIRED）。"""
+def lookup_calibration(judge_id, judge_model, rubric_hash, prompt_hash, gold_version=None) -> dict | None:
+    """查最新匹配的校准 artifact（outcome gate 出判定前强制验证）。无 → None（→ CALIBRATION_REQUIRED）。
+
+    gold_version=None → 不按 gold 过滤（gate 匹配键 = judge+rubric+prompt；gold 版本仅记录供追溯，
+    outcome 命令不知 gold 版本，故按三键取最新）。传具体值则精确匹配。
+    """
     conn = _connect()
-    row = conn.execute(
-        "SELECT * FROM eval_calibrations WHERE judge_id=? AND judge_model=? AND rubric_hash=? "
-        "AND prompt_hash=? AND gold_version=? ORDER BY date DESC LIMIT 1",
-        (judge_id, judge_model, rubric_hash, prompt_hash, gold_version),
-    ).fetchone()
+    if gold_version is None:
+        row = conn.execute(
+            "SELECT * FROM eval_calibrations WHERE judge_id=? AND judge_model=? AND rubric_hash=? "
+            "AND prompt_hash=? ORDER BY date DESC LIMIT 1",
+            (judge_id, judge_model, rubric_hash, prompt_hash),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM eval_calibrations WHERE judge_id=? AND judge_model=? AND rubric_hash=? "
+            "AND prompt_hash=? AND gold_version=? ORDER BY date DESC LIMIT 1",
+            (judge_id, judge_model, rubric_hash, prompt_hash, gold_version),
+        ).fetchone()
     return dict(row) if row else None
 
 
