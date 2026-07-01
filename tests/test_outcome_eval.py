@@ -294,6 +294,21 @@ def test_gate_respects_custom_config():
     assert g["decision"] == "NO_GO"
 
 
+def test_gate_cost_primary_false_for_coverage_treatment():
+    # 覆盖型 treatment（memory/additive）：两臂 cost 持平 → cost_ratio≈1.0。
+    # 默认 cost_primary=True：CI low=1.0>0.85 → NO_GO（cost 错配，additive/memory 两例证明）。
+    # cost_primary=False：cost 不进判定 → useful 非劣 + missed 不增 → GO。
+    recs, jdgs = _make_run(35, d_cost=0.01, d_useful=2, r_cost=0.01, r_useful=2)
+    g_cost = evaluate_gate(recs, jdgs, DEFAULT_OUTCOME_VARIANTS, run_id="r-cp1", calibration_ok=True)
+    assert g_cost["decision"] == "NO_GO"
+    assert any("cost_ratio" in r for r in g_cost["reasons"])
+    g_cov = evaluate_gate(recs, jdgs, DEFAULT_OUTCOME_VARIANTS, run_id="r-cp0",
+                          cfg=GateConfig(cost_primary=False), calibration_ok=True)
+    assert g_cov["decision"] == "GO", g_cov["reasons"]
+    assert not any("cost_ratio" in r for r in g_cov["reasons"])
+    assert any("覆盖型" in r for r in g_cov["reasons"])
+
+
 # ---------- run_outcome_eval 端到端（mock）----------
 
 

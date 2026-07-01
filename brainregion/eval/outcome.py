@@ -129,6 +129,9 @@ class GateConfig:
     """闸门阈值（默认对齐 eval_harness §6）。集中于此——实验/CI/论文改阈值不动代码。"""
 
     cost_ratio: float = 0.85              # primary: cost_ratio CI high ≤ 此值（整段满足降本）
+    cost_primary: bool = True             # False = cost 不进 GO/NO_GO 判定（仅 diagnostic）。
+    # 覆盖型 treatment（memory/additive）召回免费 + 两臂同 panel → cost 结构持平，降本非其目标 →
+    # cost 闸门结构上不可能过（additive/memory 两例证明）。False 时看 useful + missed_critical。
     missed_wake_rate_max: float = 0.10    # hard: missed_wake_rate ≤ 此值（路由层，点估计）
     latency_p95_floor_ms: float = 6000.0  # hard: latency_p95 的绝对下限
     latency_ratio_max: float = 1.5        # hard: latency_p95 ≤ max(ratio×A, floor)
@@ -503,7 +506,7 @@ def evaluate_gate(
         cost_ok = cr["point"] is not None and cr["high"] is not None and cr["high"] <= cfg.cost_ratio
         useful_ok = ud["point"] is not None and ud["low"] is not None and ud["low"] >= 0
         missed_ok = md["point"] is not None and md["high"] is not None and md["high"] <= 0
-        cost_fail = cr["low"] is not None and cr["low"] > cfg.cost_ratio
+        cost_fail = (cr["low"] is not None and cr["low"] > cfg.cost_ratio) if cfg.cost_primary else False
         useful_fail = ud["high"] is not None and ud["high"] < 0
         missed_fail = md["low"] is not None and md["low"] > 0
 
@@ -527,9 +530,12 @@ def evaluate_gate(
                 reasons.append(f"useful_delta CI high={ud['high']:.4f} < 0（整段确定劣化）")
             if missed_fail:
                 reasons.append(f"missed_critical_delta CI low={md['low']:.4f} > 0（整段确定多漏关键）")
-        elif cost_ok and useful_ok and missed_ok:
+        elif (cost_ok if cfg.cost_primary else True) and useful_ok and missed_ok:
             decision = "GO"
-            reasons.append("三 primary 整段 CI 满足（cost 降 / useful 非劣 / missed_critical 不增）且 hard gates 过")
+            if cfg.cost_primary:
+                reasons.append("三 primary 整段 CI 满足（cost 降 / useful 非劣 / missed_critical 不增）且 hard gates 过")
+            else:
+                reasons.append("覆盖型 operating point：useful 非劣 + missed_critical 不增（cost 非目标，仅 diagnostic）且 hard gates 过")
         else:
             decision = "INCONCLUSIVE"
             reasons.append("某 primary CI 跨阈值（无法确定满足或失败）")
@@ -643,10 +649,15 @@ async def run_outcome_eval(
     # Phase2A：memory A/B 单变量——control=routed, treatment=routed_memory。
     # 修 gate 静默：原调用漏传 control/treatment → 新 arm 对 GO/NO_GO 不可见（用默认 default/routed）。
     has_memory = any(getattr(v, "inject_memory", False) for v in variants)
-    gate_kwargs = {"run_id": run_id, "calibration_ok": calib_ok, "confidence": GateConfig().confidence}
+    gate_kwargs = {"run_id": run_id, "calibration_ok": calib_ok}
     if has_memory:
+        # memory 召回免费 + 两臂同 panel → cost 结构持平，降本非其目标 → cost 不当 primary
+        # （additive/memory 两例证明 cost≤0.85 闸门对覆盖型 treatment 结构上不可能过）。
         gate_kwargs["control"] = "routed"
         gate_kwargs["treatment"] = "routed_memory"
+        gate_kwargs["cfg"] = GateConfig(cost_primary=False)
+    else:
+        gate_kwargs["confidence"] = GateConfig().confidence
     gate = evaluate_gate(records, judgements, variants, **gate_kwargs)
     summary["gate"] = gate
 

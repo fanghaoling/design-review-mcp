@@ -104,6 +104,7 @@ async def test_gate_treatment_is_routed_memory_when_memory_present(monkeypatch, 
     )
     assert captured.get("control") == "routed"
     assert captured.get("treatment") == "routed_memory"  # 修 gate 静默：memory arm 到达判定
+    assert captured.get("cfg").cost_primary is False     # 覆盖型：cost 不当 primary（同 additive 教训）
 
 
 @pytest.mark.asyncio
