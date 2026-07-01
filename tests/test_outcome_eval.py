@@ -225,6 +225,13 @@ def test_gate_go():
     assert g["decision"] == "GO", g["reasons"]
 
 
+def test_gate_useful_absolute_delta():
+    # routed useful=4 > default useful=2，n=10 → 绝对 delta=(4-2)*10=20（rate 可能因 total 稀释，绝对值才是直读）
+    recs, jdgs = _make_run(10, d_cost=0.01, d_useful=2, r_cost=0.01, r_useful=4)
+    g = evaluate_gate(recs, jdgs, DEFAULT_OUTCOME_VARIANTS, run_id="run-abs", calibration_ok=True)
+    assert g["diagnostics"]["useful_absolute_delta"] == 20
+
+
 def test_gate_pilot_prefix():
     # n=20（<formal_min_n=30）+ GO 信号 → pilot_GO（不宣称可信闸门）
     recs, jdgs = _make_run(20, d_cost=0.01, d_useful=2, r_cost=0.005, r_useful=2)

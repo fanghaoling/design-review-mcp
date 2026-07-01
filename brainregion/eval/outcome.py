@@ -530,6 +530,13 @@ def evaluate_gate(
         "cost_ratio_ci": {k: boot["cost_ratio"][k] for k in ("point", "low", "high", "effective_rate")},
         "useful_delta_ci": {k: boot["useful_delta"][k] for k in ("point", "low", "high", "effective_rate")},
         "missed_critical_delta_ci": {k: boot["missed_critical_delta"][k] for k in ("point", "low", "high", "effective_rate")},
+        # useful_absolute_delta：Σ(treatment useful) − Σ(control useful)，跨 task×judge 求和（计数，非 rate）。
+        # 与 useful_delta_ci（rate=useful/total_advice）互补——additive 产更多 advice 时 rate 会被稀释误导，
+        # 绝对值才是「treatment 是否给出更多有用建议」的直读信号（additive 验证：rate 负但绝对值正）。
+        "useful_absolute_delta": (
+            sum(int((j.scores or {}).get("useful", 0) or 0) for j in judgements if j.variant == treatment)
+            - sum(int((j.scores or {}).get("useful", 0) or 0) for j in judgements if j.variant == control)
+        ),
         "bootstrap_quantiles": {m: boot[m]["quantiles"] for m in boot},
         "per_judge_metrics": _per_judge_metrics(judgements, control, treatment),
         "routed_default_overlap_rate": _routed_default_overlap(records, variants),
