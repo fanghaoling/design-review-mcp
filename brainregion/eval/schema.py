@@ -24,7 +24,11 @@ class EvalTask:
     input: dict = field(default_factory=dict)
     # input = {content, document_type, files, panel, dimensions, extra_context}
     gold_regions: list[str] = field(default_factory=list)  # routing eval：本任务【应唤醒】的 region（wake 精度 ground truth）
-    seed_memory: list = field(default_factory=list)  # Phase2A：memory A/B 的冻结经验种子（eval 不读 DB = 防伪记忆）
+    seed_memory: list = field(default_factory=list)  # Phase2A RELEVANT 臂：冻结经验种子（eval 不读 DB = 防伪记忆）
+    seed_memory_irrelevant: list = field(default_factory=list)  # Phase2A.5 IRRELEVANT 臂：跨域真实无关，控 token 长度
+    seed_memory_stale: list = field(default_factory=list)      # Phase2A.5 STALE 臂：过时事实当现状陈述（不揭穿）
+    gold_check: dict = field(default_factory=dict)  # Phase2A.5 程序 diagnostic：{must_not_contain_any, must_contain_any}
+    exp_type: str = ""  # Phase2A.5 分层：Constraint|Failure|Decision|Preference
     notes: str = ""
     frozen: bool = True
 

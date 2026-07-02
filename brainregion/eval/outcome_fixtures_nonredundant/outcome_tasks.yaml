@@ -1,0 +1,201 @@
+# Phase2A.5 非冗余 memory 4 臂研究实验 fixtures（OFF/RELEVANT/IRRELEVANT/STALE）。
+# 全部 Unity ECS 主力项目，gold 经「对话记录 + git 已提交代码」交叉确认（VERIFIED）。
+# 主比较 RELEVANT vs IRRELEVANT（控 token 长度，量 information quality）。
+# IRRELEVANT = 跨域真实事实（当 gold 不可靠，当无关 placebo 正好）；STALE = 过时旧法当现状陈述。
+# 三类 seed 共用相同 triggers（保证都被召回），区别在 content（relevant/irrelevant/stale）。
+
+- id: mnr-01-flowfield
+  task_type: consult
+  difficulty: complex
+  exp_type: Decision
+  input:
+    problem: "Unity DOTS 项目，程序化动态地牢里 100-200 个敌人多数追同一个玩家。该选哪种寻路方案？"
+    why_stuck: "NavMesh 在动态地牢里每次地形变化重算太慢；per-agent A* 对共享目标的群体像是浪费。"
+    question: "NavMesh / per-agent A* / FlowField 选哪个，为什么？"
+    goal: "满足'多单位共享 + 动态重算 + Burst 并行'。"
+  gold_regions: [unity_ecs, performance]
+  seed_memory:
+    - summary: "寻路选自写 CPU Burst 版 FlowField"
+      details: "NavMesh 在程序化动态地牢里重算性能硬伤；per-agent A* 对共享目标的群体浪费。FlowField 网格 SOA、Burst 并行、所有敌人共享一份、动态重算比 NavMesh 快。不用任何现成寻路/GPU 资产。"
+      triggers: ["寻路", "NavMesh", "A*", "FlowField", "动态", "Burst", "敌人", "DOTS"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "贴片机用 5 个 TMC2209 步进驱动"
+      details: "运动系统 2 个 X/Y + 1 个 Z + 2 个旋转轴，无 feeder 轴，bulk/tray 上料 + 视觉定位。"
+      triggers: ["寻路", "NavMesh", "A*", "FlowField", "动态", "Burst", "敌人", "DOTS"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "项目寻路用 NavMeshAgent 实现"
+      details: "所有敌人挂 NavMeshAgent，走 Unity 官方 NavMesh 烘焙。动态地牢每次地形变化重新烘焙 NavMesh。"
+      triggers: ["寻路", "NavMesh", "A*", "FlowField", "动态", "Burst", "敌人", "DOTS"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["FlowField"], must_not_contain_any: ["NavMesh", "NavMeshAgent", "A* Pathfinding"]}
+  notes: "VERIFIED 用户确认可用。gold: 别 NavMesh、用 FlowField。"
+
+- id: mnr-02-disablerendering
+  task_type: consult
+  difficulty: complex
+  exp_type: Constraint
+  input:
+    problem: "Unity ECS 项目用 Rukhanka 做 ECS 骨骼动画。被摧毁/隐藏的角色要临时隐藏渲染，怎么做？"
+    why_stuck: "直觉把 LocalTransform.Scale 设 0 来隐藏，但实测藏不掉。"
+    question: "正确的隐藏渲染方式是什么，Scale 为什么不行？"
+    goal: "可靠隐藏带骨骼动画的角色渲染。"
+  gold_regions: [unity_ecs]
+  seed_memory:
+    - summary: "隐藏渲染必须用 DisableRendering，不能用 Scale"
+      details: "Rukhanka 动画管线每帧覆盖骨骼 LocalTransform，Scale 对 skinned mesh 无效（会被当帧覆盖回来）。必须用 DisableRendering。"
+      triggers: ["隐藏", "渲染", "Scale", "DisableRendering", "Rukhanka", "动画", "角色", "骨骼"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "Blender Cycles 烘焙法线全黑用 BVH 替代"
+      details: "Cycles selected_to_active 在 4.5.4 LTS 坏，自写 BVH raycast Python baker 出法线。"
+      triggers: ["隐藏", "渲染", "Scale", "DisableRendering", "Rukhanka", "动画", "角色", "骨骼"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "项目用 LocalTransform.Scale=0 隐藏角色"
+      details: "被摧毁的角色把 Scale 设为 0 来隐藏渲染。"
+      triggers: ["隐藏", "渲染", "Scale", "DisableRendering", "Rukhanka", "动画", "角色", "骨骼"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["DisableRendering"], must_not_contain_any: ["Scale=0", "Scale = 0", "Scale 设为 0"]}
+  notes: "VERIFIED 用户确认解决。gold: 必须 DisableRendering（Rukhanka 覆 LocalTransform）。"
+
+- id: mnr-03-ao-clamp
+  task_type: consult
+  difficulty: complex
+  exp_type: Failure
+  input:
+    problem: "Unity Burst job 里把逐顶点 AO（ambient occlusion，0~1 float）存盘成 byte。直接 (byte)(ao*255) 偶发全黑采样。"
+    why_stuck: "ao 略大于 1 时结果不对。"
+    question: "(byte)(ao*255) 错在哪，正确写法？"
+    goal: "float AO → byte 不回绕。"
+  gold_regions: [unity_ecs, performance]
+  seed_memory:
+    - summary: "(byte)(ao*255) 在 Burst 下缺饱和截断，ao>1 回绕成 0"
+      details: "float→byte 强转无饱和：ao 略 >1 时 (byte)(ao*255) 回绕成 0 而非钳到 255，产生全黑采样。正确写法 (byte)math.clamp(ao*255f+0.5f, 0f, 255f)（饱和截断 + 四舍五入）。"
+      triggers: ["Burst", "AO", "byte", "clamp", "饱和", "ambient", "采样", "存盘"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "SuperDoc text.rewrite 坏改用 superdoc_edit"
+      details: "批量改 docx 段落 text.rewrite 一直报错，改 superdoc_edit replace。"
+      triggers: ["Burst", "AO", "byte", "clamp", "饱和", "ambient", "采样", "存盘"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "AO 存盘用 (byte)(ao*255)"
+      details: "逐顶点 AO 直接 (byte)(ao*255) 强转存盘。"
+      triggers: ["Burst", "AO", "byte", "clamp", "饱和", "ambient", "采样", "存盘"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["clamp"], must_not_contain_any: ["(byte)(ao*255", "(byte)(ao * 255"]}
+  notes: "VERIFIED LowQualityMeshSystem.cs:463。gold: 必须 clamp 截断、不得直 (byte)(ao*255)。"
+
+- id: mnr-04-nativearray-flatten
+  task_type: consult
+  difficulty: complex
+  exp_type: Constraint
+  input:
+    problem: "Unity Burst job 要用每面（6 个方向）的顶点常量（每面 4 顶点）+ 平面轴常量（每面 2 轴），原本是托管 jagged 数组 [6][4]、[6][2]。怎么传进 Burst？"
+    why_stuck: "Burst 不接受托管 [][]。"
+    question: "Burst 里怎么组织这些定长常量？"
+    goal: "Burst 能访问这些 per-face 常量。"
+  gold_regions: [unity_ecs]
+  seed_memory:
+    - summary: "Burst 禁 jagged [][]，扁平化 NativeArray + 显式索引"
+      details: "Burst 不支持托管 jagged 数组。扁平化为 NativeArray<float3>（长 24）/ NativeArray<int3>（长 12），用 dir*4+v / dir*2+a 显式索引。顶点 CCW 顺序与轴次序必须逐 dir 对照原常量，否则 AO 采样错位（静默视觉 bug）。"
+      triggers: ["Burst", "jagged", "NativeArray", "顶点", "常量", "扁平化", "面", "索引"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "贴片机 Z 轴用同步带不是丝杆"
+      details: "Z 轴升降用同步带/timing belt，早期文档曾错填丝杆。"
+      triggers: ["Burst", "jagged", "NativeArray", "顶点", "常量", "扁平化", "面", "索引"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "用托管 jagged 数组 [][] 传常量给 job"
+      details: "每面常量存托管 [6][4] / [6][2] jagged 数组，job 里访问。"
+      triggers: ["Burst", "jagged", "NativeArray", "顶点", "常量", "扁平化", "面", "索引"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["NativeArray"], must_not_contain_any: ["[][]", "jagged"]}
+  notes: "VERIFIED LowQualityMeshSystem.cs:200-209。gold: 必须 NativeArray 扁平化、不得 jagged [][]。"
+
+- id: mnr-05-bc1040-static
+  task_type: consult
+  difficulty: complex
+  exp_type: Failure
+  input:
+    problem: "Unity 项目给系统级性能埋点，想用一个全局开关门控 Burst 系统的计时逻辑。Burst AOT 打包报 BC1040: Loading from a non-readonly static field is not supported。Editor 下不报。"
+    why_stuck: "mutable static bool 门控在 Burst AOT 下被拒。"
+    question: "怎么在 Burst 里做零开销门控，或绕开 BC1040？"
+    goal: "保留计时门控 + Burst AOT 通过。"
+  gold_regions: [unity_ecs, performance]
+  seed_memory:
+    - summary: "BC1040：Burst 不能读可变 static 字段；改 DynamicBuffer 管道 + 托管读 static"
+      details: "Burst 不能读可变 static 字段（BC1040）。项目重构：删掉触发 BC1040 的 Begin/End 门控，Burst 系统写 DynamicBuffer<TimingSample>，托管 TimingStatisticsSystem 读 static Enabled 消费。Burst 永不碰 static。"
+      triggers: ["Burst", "BC1040", "static", "门控", "DynamicBuffer", "计时", "埋点", "性能"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "贴片机用 5 个 TMC2209 步进驱动"
+      details: "2 XY + 1 Z + 2 旋转，无 feeder 轴。"
+      triggers: ["Burst", "BC1040", "static", "门控", "DynamicBuffer", "计时", "埋点", "性能"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "用 mutable static bool 门控 Burst 执行"
+      details: "Burst 系统开头读 static bool Enabled 决定是否计时。"
+      triggers: ["Burst", "BC1040", "static", "门控", "DynamicBuffer", "计时", "埋点", "性能"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["DynamicBuffer", "托管", "readonly", "unsafe", "重构", "FunctionPointer"], must_not_contain_any: ["static bool 门控", "Burst 读 static bool"]}
+  notes: "VERIFIED HotPathTiming.cs（删 gate + DynamicBuffer<TimingSample> 管道，非 unsafe 指针）。gold: 不得建议保留可变 static bool 门控。"
+
+- id: mnr-07-nativelist-snapshot
+  task_type: consult
+  difficulty: complex
+  exp_type: Failure
+  input:
+    problem: "Unity ECS 托管（非 Burst）OnUpdate 里一边 foreach 遍历 DynamicBuffer 一边 EntityManager.CreateEntity 创建实体，运行抛 ObjectDisposedException。"
+    why_stuck: "看起来像并发/using 作用域问题，加 try-catch 没用。"
+    question: "根因和正确写法？"
+    goal: "遍历 buffer 时安全地创建实体。"
+  gold_regions: [unity_ecs]
+  seed_memory:
+    - summary: "遍历 DynamicBuffer 时不能做结构变更；先快照 NativeList"
+      details: "遍历 DynamicBuffer 时 EntityManager.CreateEntity 等结构变更会全局 version bump，使正在持有的 buffer handle 失效 → ObjectDisposedException。根因是 ECS 结构变更（非作用域/非 GC）。修：先把待操作条目快照到 NativeList，结束遍历后再做结构变更。"
+      triggers: ["DynamicBuffer", "遍历", "CreateEntity", "结构变更", "NativeList", "快照", "ObjectDisposed", "version"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "Blender Cycles 烘焙法线全黑用 BVH 替代"
+      details: "Cycles selected_to_active 在 4.5.4 LTS 坏，自写 BVH raycast baker。"
+      triggers: ["DynamicBuffer", "遍历", "CreateEntity", "结构变更", "NativeList", "快照", "ObjectDisposed", "version"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "遍历 buffer 时直接 EntityManager.CreateEntity"
+      details: "foreach 遍历 DynamicBuffer 过程中遇到符合条件的就 EntityManager.CreateEntity。"
+      triggers: ["DynamicBuffer", "遍历", "CreateEntity", "结构变更", "NativeList", "快照", "ObjectDisposed", "version"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["NativeList", "快照", "snapshot"], must_not_contain_any: ["遍历中 CreateEntity", "遍历时 CreateEntity"]}
+  notes: "VERIFIED EnemySpawnVFXSystem.cs:54-90。gold: 先快照 NativeList 再结构变更。"
+
+- id: mnr-08-enabledrefrw
+  task_type: consult
+  difficulty: complex
+  exp_type: Constraint
+  input:
+    problem: "Unity NetCode 预测系统里，方块被武器伤害击中后要打一个'预测摧毁'tag 让预测系统当帧处理。该用 ECB 还是直接写？"
+    why_stuck: "用 EntityCommandBuffer 打 tag 似乎没问题（结构变更走 ECB 是通用最佳实践）。"
+    question: "ECB 在这里对不对，正确写法？"
+    goal: "tag 当帧生效、不破坏预测一致性。"
+  gold_regions: [unity_ecs]
+  seed_memory:
+    - summary: "预测系统打 tag 用 EnabledRefRW 同 tick，别走 ECB"
+      details: "项目里武器 job 已用 BufferLookup 直接写 buffer。若 tag 走 ECB，buffer 当 tick 写入、tag 的 SetComponentEnabled 要到 ECB playback 才落盘，产生'buffer 已有伤害但 tag 仍 disabled'窗口，使依赖 RequireForUnique(tag) 的预测系统跳过该方块 → 预测延迟到下一 tick。正确：用 EnabledRefRW<Tag>/ComponentLookup<Tag>(false)+SetComponentEnabled 在 job 内同步 enable，同 tick 生效。"
+      triggers: ["NetCode", "ECB", "tag", "预测", "EnabledRefRW", "ComponentLookup", "tick", "武器"]
+      region: "unity_ecs"
+  seed_memory_irrelevant:
+    - summary: "SuperDoc text.rewrite 坏改用 superdoc_edit"
+      details: "批量改 docx 段落 text.rewrite 报错，改 superdoc_edit replace。"
+      triggers: ["NetCode", "ECB", "tag", "预测", "EnabledRefRW", "ComponentLookup", "tick", "武器"]
+      region: "unity_ecs"
+  seed_memory_stale:
+    - summary: "用 EntityCommandBuffer 给方块打 tag"
+      details: "武器命中后通过 EntityCommandBuffer 给方块 SetComponent 打'摧毁'tag，playback 时落盘。"
+      triggers: ["NetCode", "ECB", "tag", "预测", "EnabledRefRW", "ComponentLookup", "tick", "武器"]
+      region: "unity_ecs"
+  gold_check: {must_contain_any: ["EnabledRefRW", "SetComponentEnabled"], must_not_contain_any: ["ECB 打 tag", "EntityCommandBuffer 打 tag", "ECB.SetComponent"]}
+  notes: "VERIFIED DestructibleBlockPredictionSystem.cs（EnabledRefRW<PredictedDestroyed> 同 tick）。gold: 必须 EnabledRefRW、不得 ECB 写 tag。"

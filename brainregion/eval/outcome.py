@@ -28,6 +28,7 @@ from ..core.regions import REGIONS_DIR
 from ..core.wake.gate import wake_gate
 from ..memory import MemoryProvider
 from ..memory.base import ExperienceEvent
+from .check import check_advice_signal, detect_memory_cite
 from ..server import (
     _build_consult_engine,
     _normalize_panel,
@@ -39,7 +40,7 @@ from .judge import advice_prompt_skeleton_hash, judge_task_advice
 from .prices import ensure_doc_prices_registered
 from .metadata import defaults_hash, git_sha
 from .runner import aggregate_variant_stats
-from .schema import EvalCaseRecord, EvalLedgerEntry
+from .schema import BlindJudgement, EvalCaseRecord, EvalLedgerEntry
 from .stats import (
     bootstrap_statistic,
     cost_ratio_stat,
@@ -115,7 +116,9 @@ def _resolve_variant_consultants(
 class OutcomeVariant:
     name: str
     strategy: Strategy = "default"
-    inject_memory: bool = False  # Phase2A：routed+memory 正交轴（不改 strategy，单变量 A/B）
+    inject_memory: bool = False  # Phase2A RELEVANT 臂（不改 strategy，正交轴）
+    inject_memory_irrelevant: bool = False  # Phase2A.5 IRRELEVANT 臂（跨域无关，控 token 长度）
+    inject_memory_stale: bool = False        # Phase2A.5 STALE 臂（过时事实当现状）
 
 
 DEFAULT_OUTCOME_VARIANTS = [
@@ -587,6 +590,61 @@ def _calibration_ok(judge_entries: list[dict], rubric_hash: str, prompt_hash: st
     return True
 
 
+def compute_memory_diagnostics(judgements: list, variants: list[OutcomeVariant]) -> dict:
+    """Phase2A.5 4 臂 memory 研究实验 diagnostic（**不进 gate**，GPT：关键词钝）。
+
+    主比较 RELEVANT vs IRRELEVANT（控 token 长度，量 information quality 而非 context length）。
+    只用 judge_id=="programmatic" 的 judgement（check_advice_signal 产出）。
+    """
+    prog = [j for j in judgements if getattr(j, "judge_id", "") == "programmatic"]
+    if not prog:
+        return {}
+    by_task: dict[str, dict[str, dict]] = {}
+    for j in prog:
+        s = j.scores or {}
+        by_task.setdefault(j.task_id, {})[j.variant] = {
+            "violation": int(s.get("constraint_violation") or 0),
+            "applies": int(s.get("applies_context") or 0),
+            "cite": int(s.get("cite_count") or 0),
+        }
+    var_names = [v.name for v in variants]
+    per_arm: dict = {}
+    for vn in var_names:
+        vals = [by_task[t][vn] for t in by_task if vn in by_task[t]]
+        if vals:
+            n = len(vals)
+            per_arm[vn] = {
+                "n": n,
+                "violation_rate": round(sum(v["violation"] for v in vals) / n, 3),
+                "applies_rate": round(sum(v["applies"] for v in vals) / n, 3),
+                "cite_mean": round(sum(v["cite"] for v in vals) / n, 2),
+            }
+    # pairwise violation delta CI（delta = mean(treatment) − mean(control)；负=treatment 更少违反=好）
+    pairs = [
+        ("routed_memory_irrelevant", "routed_memory", "relevant_vs_irrelevant"),  # 主比较
+        ("routed", "routed_memory", "relevant_vs_off"),
+        ("routed", "routed_memory_stale", "stale_vs_off"),
+    ]
+    pairwise: dict = {}
+    for control, treatment, label in pairs:
+        if control not in var_names or treatment not in var_names:
+            continue
+        rows = [
+            {"c": by_task[t][control]["violation"], "t": by_task[t][treatment]["violation"]}
+            for t in by_task if control in by_task[t] and treatment in by_task[t]
+        ]
+        if len(rows) >= 2:
+            def _delta(rs):
+                return (sum(r["t"] for r in rs) - sum(r["c"] for r in rs)) / len(rs) if rs else None
+            boot = bootstrap_statistic(rows, _delta, seed=seed_for("mem-diag", label))
+            pairwise[label] = {k: boot.get(k) for k in ("point", "low", "high", "effective_rate")}
+    return {
+        "per_arm": per_arm,
+        "pairwise_delta_ci": pairwise,
+        "primary": "relevant_vs_irrelevant：CI 整段<0 = RELEVANT violation 显著少于 IRRELEVANT = memory 信息有效（超越纯上下文长度）",
+    }
+
+
 async def run_outcome_eval(
     tasks: list, variants: list[OutcomeVariant], judge_entries: list[dict],
     dd: dict, rubric_text: str, rubric_hash: str, run_id: str,
@@ -604,6 +662,7 @@ async def run_outcome_eval(
     endpoint_ids = set((_resolve_endpoints(dd.get("endpoints") or {}) or {}).keys())
     records: list[OutcomeRecord] = []
     judgements: list = []
+    memory_instr: list = []  # Phase2A.5：per (task,variant) memory 召回 instrumentation
 
     for task in tasks:
         request = _build_request(task)
@@ -614,13 +673,24 @@ async def run_outcome_eval(
         for v in variants:
             consultants, mapping_source = _resolve_variant_consultants(v, shared_wake["woken"], dd)
             context_blocks: list = []
+            # Phase2A.5 4 臂 seed 选择：RELEVANT/IRRELEVANT/STALE 各从对应冻结 seed 纯内存召回。
+            seed_list, arm = None, "OFF"
             if getattr(v, "inject_memory", False):
-                # routed+memory 正交轴：从 task 冻结 seed 纯内存召回（不读 DB = 防伪记忆，§15.3 🔍）。
-                evs = [_seed_to_event(m) for m in (getattr(task, "seed_memory", None) or [])]
+                seed_list, arm = getattr(task, "seed_memory", None), "RELEVANT"
+            elif getattr(v, "inject_memory_irrelevant", False):
+                seed_list, arm = getattr(task, "seed_memory_irrelevant", None), "IRRELEVANT"
+            elif getattr(v, "inject_memory_stale", False):
+                seed_list, arm = getattr(task, "seed_memory_stale", None), "STALE"
+            if seed_list:
+                evs = [_seed_to_event(m) for m in seed_list]
                 rr = MemoryProvider.from_records(evs).retrieve(
                     ContextQuery(text=_task_context(task), top_k=int(dd.get("memory_recall_top_k", 5)))
                 )
                 context_blocks = rr.blocks
+                memory_instr.append({
+                    "task_id": task.id, "variant": v.name, "arm": arm,
+                    "candidates": rr.meta.get("candidates_before_top_k"), "injected": len(rr.blocks),
+                })
             rec = await run_outcome_variant(
                 engine, request, panel, consultants, v, mapping_source, shared_wake,
                 effort, max_cost_usd, run_id, task.id, context_blocks=context_blocks,
@@ -639,6 +709,23 @@ async def run_outcome_eval(
                     judgements.append(j)
             except Exception as e:  # noqa: BLE001
                 logger.warning("judge_task_advice 失败 task=%s judge=%s: %s", task.id, je.get("label"), e)
+        # Phase2A.5 程序 diagnostic（仅 diagnostic 不进 gate）：gold_check → 合成 programmatic judgement。
+        if getattr(task, "gold_check", None):
+            for v in variants:
+                out = variant_outputs.get(v.name)
+                if not out:
+                    continue
+                try:
+                    rep = json.loads(out)
+                    sig = check_advice_signal(rep, task.gold_check)
+                    cite = detect_memory_cite(rep)
+                    pj = BlindJudgement(
+                        run_id=run_id, task_id=task.id, judge_id="programmatic", judge_model="rule",
+                        rubric_hash="", variant=v.name, scores={**sig, **cite})
+                    store.record_judgement(pj)
+                    judgements.append(pj)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("check_advice_signal 失败 task=%s variant=%s: %s", task.id, v.name, e)
 
     summary = compute_outcome_summary(records, judgements, variants)
     summary["sanity"] = outcome_sanity(records, judgements, variants)
@@ -660,6 +747,8 @@ async def run_outcome_eval(
         gate_kwargs["confidence"] = GateConfig().confidence
     gate = evaluate_gate(records, judgements, variants, **gate_kwargs)
     summary["gate"] = gate
+    summary["memory_diagnostics"] = compute_memory_diagnostics(judgements, variants)
+    summary["memory_instrumentation"] = memory_instr
 
     entry = EvalLedgerEntry(
         run_id=run_id,

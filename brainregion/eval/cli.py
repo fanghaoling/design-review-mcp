@@ -52,6 +52,10 @@ def load_tasks(fixtures_dir: str) -> list[EvalTask]:
                 input=d.get("input") or {},
                 gold_regions=[str(g) for g in (d.get("gold_regions") or [])],
                 seed_memory=list(d.get("seed_memory") or []),
+                seed_memory_irrelevant=list(d.get("seed_memory_irrelevant") or []),
+                seed_memory_stale=list(d.get("seed_memory_stale") or []),
+                gold_check=dict(d.get("gold_check") or {}),
+                exp_type=str(d.get("exp_type") or ""),
                 notes=d.get("notes", ""),
                 frozen=bool(d.get("frozen", True)),
             ))
@@ -283,11 +287,14 @@ async def run_outcome(args) -> dict:
         # ——唯一变量=映射方式（替换 vs 叠加），与 routed 共用 wake/panel/judge
         variants.append(OutcomeVariant("routed_additive", "routed_additive"))
     if getattr(args, "memory", False):
-        # Phase2A 单变量：routed(control) vs routed+memory(treatment)，不跑 default
-        # （default vs routed 已在 Phase 1 定论）。memory 经 ContextProvider 召回注入 consult。
+        # Phase2A.5 4 臂研究实验：OFF/RELEVANT/IRRELEVANT/STALE。
+        # 主比较 RELEVANT vs IRRELEVANT（控 token 长度，量 information quality）。
+        # default vs routed 已在 Phase 1 定论 → 不跑 default。
         variants = [
             OutcomeVariant("routed", "routed"),
             OutcomeVariant("routed_memory", "routed", inject_memory=True),
+            OutcomeVariant("routed_memory_irrelevant", "routed", inject_memory_irrelevant=True),
+            OutcomeVariant("routed_memory_stale", "routed", inject_memory_stale=True),
         ]
 
     endpoints_cfg = dd.get("endpoints") or {}
